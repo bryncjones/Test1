@@ -60,7 +60,7 @@ The scripts in `tools/` regenerate `data/` from the open buckets. They need Pyth
 
 1. `1_pick_scene.py` scores Sentinel-2 scenes by cloud over the area.
 2. `2_fetch_dem_landcover.py` and `3_fetch_bathymetry.py` download the elevation, land cover and coarse depths.
-3. `4_bake.py` writes `terrain.bin` (int16, decimetres), `imagery.jpg`, `landcover.png` and `meta.json`.
+3. `4_bake.py` writes `terrain.bin`, `imagery.jpg`, `landcover.png` and `meta.json`. Then convert `terrain.bin` to `terrain.png` (decimetres + 32768, high byte in red, low byte in green), because static hosts like claude.ai only serve standard file types.
 
 Run them from the same working directory. The spot coordinates in `meta.json` were placed by hand against the imagery, so re-add them after a rebuild.
 

@@ -17,10 +17,10 @@
   "north": 51.17
  },
  "elevation": {
-  "file": "terrain.bin",
-  "type": "int16le",
+  "file": "terrain.png",
+  "encoding": "R*256+G-32768 decimetres",
   "scale": 0.1,
-  "units": "m above mean sea level"
+  "units": "m above mean sea level (EGM2008 geoid)"
  },
  "imagery": {
   "file": "imagery.jpg",
