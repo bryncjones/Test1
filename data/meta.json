@@ -1,0 +1,61 @@
+{
+ "lat0": 51.115,
+ "lon0": -4.24,
+ "mPerDegLat": 111250.0,
+ "mPerDegLon": 69882.16444687391,
+ "cell": 12.5,
+ "W": 895,
+ "H": 980,
+ "xmin": -5590.5731557499175,
+ "zmin": -6118.749999999968,
+ "xmax": 5584.4268442500825,
+ "zmax": 6118.750000000032,
+ "bounds": {
+  "west": -4.32,
+  "east": -4.16,
+  "south": 51.06,
+  "north": 51.17
+ },
+ "elevation": {
+  "file": "terrain.bin",
+  "type": "int16le",
+  "scale": 0.1,
+  "units": "m above mean sea level"
+ },
+ "imagery": {
+  "file": "imagery.jpg",
+  "width": 2237,
+  "height": 2448,
+  "cellM": 5,
+  "scene": "S2A_30UVB_20230904_0_L2A"
+ },
+ "landcover": {
+  "file": "landcover.png",
+  "width": 1119,
+  "height": 1225,
+  "cellM": 10
+ },
+ "imagedWaterlineTideM": -1.8,
+ "spots": [
+  {
+   "name": "Saunton Sands",
+   "lat": 51.1026,
+   "lon": -4.2234
+  },
+  {
+   "name": "Croyde",
+   "lat": 51.1305,
+   "lon": -4.2402
+  },
+  {
+   "name": "Putsborough",
+   "lat": 51.1468,
+   "lon": -4.2208
+  },
+  {
+   "name": "Woolacombe",
+   "lat": 51.1646,
+   "lon": -4.2116
+  }
+ ]
+}

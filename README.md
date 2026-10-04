@@ -1,45 +1,73 @@
 # Saunton Sands 3D
 
-A 3D, browser-based view of Saunton Sands in North Devon with animated surf. It is a single file (`index.html`) built on three.js and has no build step.
+A 3D surf view of Saunton Sands, Croyde, Putsborough and Woolacombe in North Devon. It is built on real elevation, satellite imagery and land-cover data, with a live swell, wind and tide forecast. `index.html` plus the `data/` folder is the whole app, built on three.js with no build step.
 
-## What it does
+## What it shows
 
-- **Terrain**: by default, a hand-built approximate model of the coast: Saunton Down, the beach, Braunton Burrows dunes, fields and the Taw/Torridge mouth. It is not survey data. With a Mapbox or MapTiler key, the app instead loads real aerial imagery and elevation tiles for the area (about 51.065–51.135°N, 4.18–4.29°W).
-- **Waves**:
-  - Swell is refracted over the seabed. An eikonal solver finds the crest pattern from the linear dispersion relation, so crests bend towards the beach and shorten in shallow water.
-  - Waves shoal, then break once their height passes about 0.78 × the water depth. Broken waves run up the sand as bores with foam.
-  - Swell height, period and direction, tide and wind chop are all adjustable.
-- **Light**: the sun position comes from the date and the Saunton time of day. A procedural sky with clouds drives the water reflections, terrain lighting, wet-sand sheen and haze.
-- **Views**: Overview, On the beach, In the line-up and Saunton Down.
+- **Real terrain:** Copernicus GLO-30 elevation and Sentinel-2 imagery, with ESA WorldCover land cover adding fine texture close up.
+- **Real-ish seabed:** a modelled shoreface (sandbars on sandy coast, steeper off rock) blended into coarse measured depths offshore.
+- **Refracted swell:**
+  - The main swell bends towards shallow water, shoals and breaks at 0.78 × depth.
+  - Headlands cast a shelter shadow over a ±20° directional spread.
+  - Broken waves run up the sand.
+- **Forecast:**
+  - Seven days of hourly data from Open-Meteo (swell, a second swell, wind and sea level including tide).
+  - A play-through scrubber and a tide curve with high and low water times.
+  - Wind is rated against the direction each beach faces.
+- **Breaking height in the model** for each spot, shown in the panel and as map labels. The second swell is added by energy. These numbers are the model's own, not a tuned surf forecast.
+- **Light:** the real sun position for the chosen day and hour, plus a sky with clouds that drives the water reflections and haze.
+- **Views:** Whole area, Saunton Sands, On the beach, In the line-up, Saunton Down and From above.
 
 ## Run it
 
-The tile servers need a normal web origin, so serve the folder over HTTP rather than opening the file directly:
-
 ```sh
 python3 -m http.server 8000
-# then open http://localhost:8000/
+# open http://localhost:8000/
 ```
 
-GitHub Pages also works. In the repo settings, go to Pages and deploy from the branch root.
+GitHub Pages also works. Deploy from the branch root.
 
-## Satellite terrain
+The page fetches its own `data/` files, so open it through a web server rather than as a file.
 
-1. Open **Satellite terrain** in the panel.
-2. Pick a provider and paste your key:
-   - **Mapbox**: a public access token (`pk.…`). Uses the `mapbox.satellite` and `mapbox.terrain-rgb` raster tilesets.
-   - **MapTiler**: an API key. Uses `satellite-v2` and `terrain-rgb-v2`.
-3. Press **Load satellite**. The first load downloads roughly 36 elevation tiles and 36–144 imagery tiles.
+The forecast comes straight from Open-Meteo in the browser. It is free for non-commercial use and needs no key. Pages hosted on claude.ai block outside requests, so the forecast only works when the page is self-hosted. Elsewhere the "Try your own swell" sliders still work.
 
-The key lives only in your browser (in `localStorage` if "Remember on this device" is ticked) and is sent only to the provider you choose. Don't commit a key to this repo. Restrict the token to your site's URL in the provider's dashboard.
+## Sharper imagery (optional)
 
-Elevation tiles carry little or no seabed detail along this coast. Below the low-water line, the app synthesises a gentle sandy profile with two sandbars, and keeps any deeper measured values.
+Sentinel-2 is 10 m per pixel. Under **Sharper imagery** you can paste a Mapbox public token or a MapTiler key to drape 1.5–3 m aerial imagery over the land and beach. The key stays in your browser. Restrict it to your site's URL in the provider's dashboard, and don't commit it.
+
+## Data and credits
+
+| Layer | Source | Notes |
+|---|---|---|
+| Land elevation | Copernicus DEM GLO-30 | About 30 m. It is a surface model, so woods and buildings stand up. Resampled to 12.5 m. |
+| Imagery | Sentinel-2 L2A true colour, scene `S2A_30UVB_20230904_0_L2A` | 10 m, colour-stretched. Water below the imaged waterline is replaced with a seabed colour. |
+| Land cover | ESA WorldCover 2021 v200 | 10 m. Used only for close-up surface detail. |
+| Offshore depths | AWS Terrain Tiles (Tilezen) | Coarse; smoothed and blended in beyond about 0.6–1.8 km from shore. |
+| Forecast | Open-Meteo marine and weather APIs | Point at 51.12°N 4.40°W. Its sea level is less reliable near coasts. |
+
+Credit lines:
+
+- Contains modified Copernicus Sentinel data 2023.
+- Copernicus DEM GLO-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA.
+- ESA WorldCover 2021 © ESA, CC BY 4.0.
+- Forecast data by Open-Meteo.com, CC BY 4.0.
+
+Check each provider's current terms before any public or commercial use.
+
+### Rebuilding `data/`
+
+The scripts in `tools/` regenerate `data/` from the open buckets. They need Python with `rasterio pyproj mgrs numpy scipy pillow packaging`.
+
+1. `1_pick_scene.py` scores Sentinel-2 scenes by cloud over the area.
+2. `2_fetch_dem_landcover.py` and `3_fetch_bathymetry.py` download the elevation, land cover and coarse depths.
+3. `4_bake.py` writes `terrain.bin` (int16, decimetres), `imagery.jpg`, `landcover.png` and `meta.json`.
+
+Run them from the same working directory. The spot coordinates in `meta.json` were placed by hand against the imagery, so re-add them after a rebuild.
 
 ## Known limits
 
-- The modelled terrain is approximate and drawn from general knowledge of the area. Use satellite mode for the real shape.
-- The seabed is synthetic in both modes. Wave refraction and breaking positions are therefore plausible, not a forecast.
-- The tide slider range (±3.8 m) is a rough approximation of the local spring range. Check real tide tables for actual heights.
-- The MapTiler tile URLs and its terrain-RGB encoding follow MapTiler's published patterns, but this build was only tested against Mapbox-format mock tiles. Verify against current MapTiler docs if loading fails.
-- claude.ai-hosted previews block requests to map servers, so satellite mode only works when the page is self-hosted.
-- Attribution strings shown in the app may need adjusting to the provider's current requirements.
+- **Higher-resolution sources are not used.** The original Hang Ten app uses Environment Agency 1 m lidar and EMODnet bathymetry. Neither was reachable from the environment this was built in, so the terrain is coarser and the near-shore seabed is modelled rather than surveyed. `4_bake.py` is the place to swap them in.
+- **Beach slope is estimated.** It assumes the dune foot is at +3.6 m and the imaged waterline at −1.8 m. The second figure is a guess, because the tide at the image time wasn't checked.
+- **Elevation datum.** Heights are relative to the EGM2008 geoid, treated as mean sea level, which may be off locally by a few tenths of a metre.
+- **No diffraction, currents or wind-wave growth.** Lees come out quieter than reality. Only the main swell is drawn.
+- **MapTiler is unverified.** Its tile URL follows its published pattern but wasn't tested here.

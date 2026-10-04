@@ -8,10 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: full-bleed WebGL scene; a glass conditions panel docks right on desktop and becomes a bottom sheet on phones. */
+/* Layout: full-bleed WebGL scene with map labels; a glass forecast panel docks right on desktop and becomes a bottom sheet on phones. */
 :root {
   --ground: #0b1820;
-  --glass: rgba(9, 22, 30, 0.74);
+  --glass: rgba(9, 22, 30, 0.76);
   --glass-strong: rgba(9, 22, 30, 0.9);
   --ink: #eaf2f1;
   --muted: #9cb4b6;
@@ -19,6 +19,9 @@
   --accent: #f0c27b;
   --focus: #7fd3d0;
   --danger: #ff9b85;
+  --good: #8fd694;
+  --fair: #f0c27b;
+  --poor: #ff9b85;
   --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --font-body: "Barlow", "Helvetica Neue", Arial, sans-serif;
   --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -39,7 +42,7 @@ body {
   top: calc(env(safe-area-inset-top, 0px) + 16px);
   left: 16px;
   pointer-events: none;
-  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 1px 14px rgba(0, 0, 0, 0.5);
   max-width: calc(100% - 32px);
 }
 .brand h1 {
@@ -52,11 +55,32 @@ body {
 .brand p { margin: 6px 0 0; font: 500 0.82rem/1.3 var(--font-data); color: var(--ink); opacity: 0.85; }
 .brand .src { color: var(--accent); white-space: nowrap; }
 
+.labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.spot-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -100%);
+  display: grid;
+  justify-items: center;
+  will-change: transform;
+}
+.spot-label .tag {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--glass-strong);
+  font: 600 0.85rem/1.2 var(--font-body);
+  white-space: nowrap;
+}
+.spot-label .tag b { font-family: var(--font-data); font-weight: 500; color: var(--accent); margin-left: 6px; }
+.spot-label .stem { width: 1px; height: 22px; background: var(--ink); opacity: 0.7; }
+
 .panel {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 16px);
   right: 16px;
-  width: 300px;
+  width: 330px;
   max-height: calc(100% - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
@@ -86,7 +110,7 @@ body {
 .panel-toggle .chev { transition: transform 0.2s ease; font-family: var(--font-data); }
 .panel[data-collapsed="true"] .panel-toggle .chev { transform: rotate(180deg); }
 .panel[data-collapsed="true"] .panel-body { display: none; }
-.panel-body { overflow-y: auto; padding: 14px 16px 16px; display: grid; gap: 16px; }
+.panel-body { overflow-y: auto; padding: 14px 16px 16px; display: grid; gap: 18px; }
 
 .readout {
   display: grid;
@@ -97,15 +121,65 @@ body {
 }
 .readout div { display: grid; gap: 2px; min-width: 0; }
 .readout .k { font: 600 0.7rem/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
-.readout .v { font: 500 0.95rem/1.2 var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.readout .v { font: 500 0.92rem/1.25 var(--font-data); font-variant-numeric: tabular-nums; }
 
-.controls { display: grid; gap: 12px; }
+.group-label { margin: 0 0 8px; font: 600 0.72rem/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.note { margin: 6px 0 0; font-size: 0.8rem; line-height: 1.4; color: var(--muted); }
+.note[data-tone="error"] { color: var(--danger); }
+
+.days { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.day {
+  display: grid;
+  gap: 1px;
+  padding: 6px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(234, 242, 241, 0.05);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.day span:first-child { font: 600 0.8rem/1.2 var(--font-body); }
+.day span:last-child { font: 0.72rem/1.2 var(--font-data); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.day[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+.day[aria-pressed="true"] span:last-child { color: var(--ground); }
+.hour-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.hour-row input { flex: 1; min-width: 0; }
+.hour-row output { font: 500 0.9rem var(--font-data); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(234, 242, 241, 0.06);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+.icon-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#tideCurve { display: block; width: 100%; height: 56px; margin-top: 6px; }
+.tide-times { display: flex; justify-content: space-between; gap: 8px; font: 0.72rem/1.2 var(--font-data); color: var(--muted); }
+
+.spots { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.spots li { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.spots .name { font-weight: 600; font-size: 0.92rem; min-width: 0; }
+.spots .wind { grid-column: 1 / -1; margin-top: -4px; font-size: 0.75rem; color: var(--muted); }
+.spots .wind[data-rel="offshore"], .spots .wind[data-rel="cross-offshore"], .spots .wind[data-rel="glassy"] { color: var(--good); }
+.spots .wind[data-rel="onshore"], .spots .wind[data-rel="cross-onshore"] { color: var(--poor); }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--accent); }
+.spots .val { font: 500 0.85rem var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.controls { display: grid; gap: 12px; margin-top: 12px; }
 .ctl { display: grid; gap: 4px; }
 .ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 0.86rem; color: var(--muted); }
 .ctl output { font: 500 0.82rem/1.2 var(--font-data); font-variant-numeric: tabular-nums; color: var(--ink); }
 input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); height: 22px; }
 
-.group-label { margin: 0 0 8px; font: 600 0.72rem/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 .views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .btn {
   padding: 8px 10px;
@@ -117,18 +191,19 @@ input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); heigh
   cursor: pointer;
   text-align: center;
 }
-.btn:hover { background: rgba(234, 242, 241, 0.12); }
+.btn:hover, .day:hover, .icon-btn:hover { background: rgba(234, 242, 241, 0.12); }
 .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1408; font-weight: 600; }
 .btn.primary:hover { filter: brightness(1.06); }
 .btn:disabled { opacity: 0.5; cursor: progress; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-details.sat { border-top: 1px solid var(--line); padding-top: 12px; }
-details.sat summary { cursor: pointer; font: 600 0.8rem/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); }
-details.sat .sat-body { display: grid; gap: 8px; margin-top: 10px; }
-details.sat p { margin: 0; font-size: 0.84rem; color: var(--muted); }
-details.sat select, details.sat input[type="password"] {
+details.sect { border-top: 1px solid var(--line); padding-top: 12px; }
+details.sect summary { cursor: pointer; font: 600 0.8rem/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); }
+details.sect .sect-body { display: grid; gap: 8px; margin-top: 10px; }
+details.sect p { margin: 0; font-size: 0.84rem; color: var(--muted); }
+details.sect p strong { color: var(--ink); font-weight: 600; }
+details.sect select, details.sect input[type="password"] {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
@@ -144,19 +219,20 @@ details.sat select, details.sat input[type="password"] {
 #satStatus { min-height: 1.2em; }
 #satStatus[data-tone="error"] { color: var(--danger); }
 #satStatus[data-tone="ok"] { color: var(--focus); }
+.credits { font: 0.72rem/1.4 var(--font-data); color: var(--muted); }
 
 .foot {
   position: fixed;
   left: 16px;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
-  max-width: min(520px, calc(100% - 352px));
+  max-width: min(520px, calc(100% - 380px));
   display: grid;
   gap: 4px;
   pointer-events: none;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 .hint { margin: 0; font-size: 0.8rem; color: var(--ink); opacity: 0.75; }
-.attrib { margin: 0; font: 0.72rem/1.3 var(--font-data); color: var(--ink); opacity: 0.75; }
+.hint.credit { font: 0.72rem/1.3 var(--font-data); }
 
 .loading {
   position: fixed;
@@ -165,16 +241,17 @@ details.sat select, details.sat input[type="password"] {
   place-content: center;
   justify-items: center;
   gap: 14px;
+  padding: 0 16px;
   background: var(--ground);
   transition: opacity 0.5s ease;
   z-index: 5;
+  text-align: center;
 }
 .loading[data-done="true"] { opacity: 0; pointer-events: none; }
-.loading p { margin: 0; font: 600 1rem/1 var(--font-display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.loading p { margin: 0; font: 600 1rem/1.3 var(--font-display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
 .swell-bar { width: 140px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .swell-bar span { display: block; width: 40%; height: 100%; background: var(--accent); animation: sweep 1.4s ease-in-out infinite; }
 @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
-.error-box { max-width: 420px; padding: 0 16px; text-align: center; color: var(--ink); }
 
 @media (max-width: 700px) {
   .panel {
@@ -183,12 +260,11 @@ details.sat select, details.sat input[type="password"] {
     right: 16px;
     bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
     width: auto;
-    max-height: 58%;
+    max-height: 60%;
   }
   .foot { display: none; }
-  .panel .attrib-inline { display: block; }
+  .spot-label .tag { font-size: 0.75rem; }
 }
-.attrib-inline { display: none; margin: 0; font: 0.7rem/1.3 var(--font-data); color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   .swell-bar span { animation: none; width: 100%; }
   .loading, .panel-toggle .chev { transition: none; }
@@ -196,11 +272,12 @@ details.sat select, details.sat input[type="password"] {
 </style>
 </head>
 <body>
-<canvas id="scene" aria-label="3D view of Saunton Sands with animated surf"></canvas>
+<canvas id="scene" aria-label="3D view of Saunton Sands, Croyde and Putsborough with animated surf"></canvas>
+<div class="labels" id="labels" aria-hidden="true"></div>
 
 <header class="brand">
   <h1>Saunton Sands</h1>
-  <p>North Devon · 51.10°N 4.23°W · <span class="src" id="srcLabel">Modelled terrain</span></p>
+  <p>North Devon · 51.10°N 4.22°W · <span class="src" id="srcLabel">Survey terrain · Sentinel-2</span></p>
 </header>
 
 <aside class="panel" id="panel" data-collapsed="false">
@@ -208,54 +285,78 @@ details.sat select, details.sat input[type="password"] {
     <span>Conditions</span><span class="chev" aria-hidden="true">▾</span>
   </button>
   <div class="panel-body" id="panelBody">
-    <section class="readout" aria-label="Current settings">
+    <section class="readout" aria-label="Conditions shown">
       <div><span class="k">Swell</span><span class="v" id="roSwell">–</span></div>
-      <div><span class="k">From</span><span class="v" id="roDir">–</span></div>
+      <div><span class="k">Wind</span><span class="v" id="roWind">–</span></div>
       <div><span class="k">Tide</span><span class="v" id="roTide">–</span></div>
       <div><span class="k">Sun</span><span class="v" id="roSun">–</span></div>
     </section>
 
-    <section class="controls" aria-label="Sea and light">
-      <div class="ctl">
-        <label for="swellH">Swell height <output id="oSwellH" for="swellH"></output></label>
-        <input type="range" id="swellH" min="0.3" max="4" step="0.1" value="1.6">
+    <section aria-labelledby="fcLabel">
+      <p class="group-label" id="fcLabel">Forecast</p>
+      <div class="days" id="days" role="group" aria-label="Forecast day"></div>
+      <div class="hour-row">
+        <button class="icon-btn" id="play" aria-label="Play through the day" aria-pressed="false">▶</button>
+        <input type="range" id="hour" min="0" max="23" step="1" value="12" aria-label="Forecast hour">
+        <output id="oHour" for="hour">12:00</output>
       </div>
-      <div class="ctl">
-        <label for="swellT">Swell period <output id="oSwellT" for="swellT"></output></label>
-        <input type="range" id="swellT" min="6" max="18" step="0.5" value="11">
-      </div>
-      <div class="ctl">
-        <label for="swellDir">Swell direction <output id="oSwellDir" for="swellDir"></output></label>
-        <input type="range" id="swellDir" min="235" max="330" step="1" value="285">
-      </div>
-      <div class="ctl">
-        <label for="tide">Tide height <output id="oTide" for="tide"></output></label>
-        <input type="range" id="tide" min="-3.8" max="3.8" step="0.1" value="0.6">
-      </div>
-      <div class="ctl">
-        <label for="chop">Wind chop <output id="oChop" for="chop"></output></label>
-        <input type="range" id="chop" min="0" max="1" step="0.05" value="0.35">
-      </div>
-      <div class="ctl">
-        <label for="tod">Time of day <output id="oTod" for="tod"></output></label>
-        <input type="range" id="tod" min="4" max="22" step="0.0833" value="16">
-      </div>
+      <canvas id="tideCurve" aria-hidden="true"></canvas>
+      <div class="tide-times" id="tideTimes"></div>
+      <p class="note" id="fcStatus" role="status">Loading the forecast…</p>
     </section>
+
+    <section aria-labelledby="brkLabel">
+      <p class="group-label" id="brkLabel">Breaking height in the model</p>
+      <ul class="spots" id="spots"></ul>
+      <p class="note">This model's own height where waves break at each spot, from the swell, period and tide over the seabed. It isn't tuned like a surf forecast, so the numbers can differ.</p>
+    </section>
+
+    <details class="sect" id="ownSwell">
+      <summary>Try your own swell</summary>
+      <div class="controls">
+        <div class="ctl">
+          <label for="swellH">Height offshore <output id="oSwellH" for="swellH"></output></label>
+          <input type="range" id="swellH" min="0.2" max="5" step="0.1" value="1.2">
+        </div>
+        <div class="ctl">
+          <label for="swellT">Period <output id="oSwellT" for="swellT"></output></label>
+          <input type="range" id="swellT" min="5" max="20" step="0.5" value="10">
+        </div>
+        <div class="ctl">
+          <label for="swellDir">Coming from <output id="oSwellDir" for="swellDir"></output></label>
+          <input type="range" id="swellDir" min="200" max="350" step="1" value="280">
+        </div>
+        <div class="ctl">
+          <label for="tide">Tide <output id="oTide" for="tide"></output></label>
+          <input type="range" id="tide" min="-4" max="4" step="0.1" value="0">
+        </div>
+        <div class="ctl">
+          <label for="chop">Wind chop <output id="oChop" for="chop"></output></label>
+          <input type="range" id="chop" min="0" max="1" step="0.05" value="0.3">
+        </div>
+        <div class="ctl">
+          <label for="tod">Time of day <output id="oTod" for="tod"></output></label>
+          <input type="range" id="tod" min="4" max="22" step="0.0833" value="12">
+        </div>
+      </div>
+    </details>
 
     <section aria-labelledby="viewsLabel">
       <p class="group-label" id="viewsLabel">Views</p>
       <div class="views" role="group" aria-labelledby="viewsLabel">
-        <button class="btn" data-view="overview" aria-pressed="true">Overview</button>
+        <button class="btn" data-view="area" aria-pressed="true">Whole area</button>
+        <button class="btn" data-view="saunton" aria-pressed="false">Saunton Sands</button>
         <button class="btn" data-view="beach" aria-pressed="false">On the beach</button>
         <button class="btn" data-view="lineup" aria-pressed="false">In the line-up</button>
-        <button class="btn" data-view="headland" aria-pressed="false">Saunton Down</button>
+        <button class="btn" data-view="down" aria-pressed="false">Saunton Down</button>
+        <button class="btn" data-view="above" aria-pressed="false">From above</button>
       </div>
     </section>
 
-    <details class="sat" id="satDetails">
-      <summary>Satellite terrain</summary>
-      <div class="sat-body">
-        <p>Load real aerial imagery and elevation with your own map key. The key stays in this browser and is sent only to the provider you pick.</p>
+    <details class="sect" id="satDetails">
+      <summary>Sharper imagery</summary>
+      <div class="sect-body">
+        <p>The built-in imagery is Sentinel-2 at 10 m. With your own map key you can drape 1.5–3 m aerial imagery on the land and beach. The key stays in this browser and goes only to the provider you pick.</p>
         <label class="check" for="provider">Provider</label>
         <select id="provider">
           <option value="mapbox">Mapbox (public token, pk.…)</option>
@@ -264,24 +365,35 @@ details.sat select, details.sat input[type="password"] {
         <input id="apiKey" type="password" placeholder="Paste token or key" autocomplete="off" spellcheck="false" aria-label="Map provider token or key">
         <label class="check"><input type="checkbox" id="rememberKey" checked> Remember on this device</label>
         <div class="row">
-          <button class="btn primary" id="loadSat">Load satellite</button>
-          <button class="btn" id="useModel">Use model</button>
+          <button class="btn primary" id="loadSat">Load imagery</button>
+          <button class="btn" id="useBuiltIn">Use Sentinel-2</button>
         </div>
         <p id="satStatus" role="status"></p>
       </div>
     </details>
-    <p class="attrib-inline" id="attribInline"></p>
+
+    <details class="sect">
+      <summary>How it's made</summary>
+      <div class="sect-body">
+        <p><strong>Land:</strong> Copernicus GLO-30 elevation (about 30 m; a surface model, so woods and buildings stand up), resampled to 12.5 m.</p>
+        <p><strong>Beach:</strong> the sand between the dune foot and the waterline in a cloud-free Sentinel-2 image (4 Sep 2023) becomes a sloping intertidal beach. The dune foot is taken as +3.6 m and that waterline as −1.8 m; both are estimates.</p>
+        <p><strong>Seabed:</strong> a smooth shoreface with two sandbars on sandy coast (steeper off rock), blended over the first 0.6–1.8 km into the coarse depths in AWS Terrain Tiles. The inner surf zone is therefore approximate.</p>
+        <p><strong>Waves:</strong> the forecast's main swell is traced across that seabed by solving for its crest pattern, so it turns towards shallow water, grows as it slows and breaks at 0.78 of the depth. A second swell, when forecast, is added by energy to the breaking heights but not drawn. There is no diffraction, wind or current, so the lee of a headland comes out quieter than it really is.</p>
+        <p><strong>Forecast:</strong> Open-Meteo marine and weather models at a point offshore. Its sea level includes the tide but is less reliable near coasts.</p>
+        <p class="credits" id="credits">Contains modified Copernicus Sentinel data 2023. Copernicus DEM GLO-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA. ESA WorldCover 2021 © ESA, CC BY 4.0. Bathymetry from AWS Terrain Tiles (Tilezen). Forecast data by Open-Meteo.com, CC BY 4.0.</p>
+      </div>
+    </details>
   </div>
 </aside>
 
 <footer class="foot">
   <p class="hint">Drag to orbit · scroll or pinch to zoom · right-drag or two fingers to pan</p>
-  <p class="attrib" id="attrib"></p>
+  <p class="hint credit">Sentinel-2 · Copernicus DEM · ESA WorldCover · Open-Meteo. Full credits under How it's made.</p>
 </footer>
 
 <div class="loading" id="loading">
   <div class="swell-bar" aria-hidden="true"><span></span></div>
-  <p id="loadingText">Shaping the coastline</p>
+  <p id="loadingText">Loading survey data</p>
 </div>
 
 <script type="importmap">
@@ -295,14 +407,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // ---------------------------------------------------------------------------
-// Geography. Local frame: metres, x = east, z = south, y = up, origin below.
+// Geography. Local frame: metres, x = east, z = south, y = up (metres above mean sea level).
+// The origin and scale come from data/meta.json.
 // ---------------------------------------------------------------------------
-const LAT0 = 51.100, LON0 = -4.235;
-const M_LAT = 111250;                                   // metres per degree of latitude near 51°N
-const M_LON = 111320 * Math.cos(LAT0 * Math.PI / 180);  // metres per degree of longitude
+const DATA = 'data/';
+let META = null;
+let LAT0 = 51.115, LON0 = -4.24, M_LAT = 111250, M_LON = 111320 * Math.cos(LAT0 * Math.PI / 180);
 const toLocal = (lat, lon) => ({ x: (lon - LON0) * M_LON, z: -(lat - LAT0) * M_LAT });
-const BOUNDS = { latS: 51.065, latN: 51.135, lonW: -4.290, lonE: -4.180 };
 const G = 9.81;
+const FT = 3.28084;
 
 const isSmall = Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches;
 
@@ -330,253 +443,59 @@ function fbm(x, z, oct = 4) {
   return s / n;
 }
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
-
-// Exact 2D Euclidean distance transform (Felzenszwalb & Huttenlocher). In: 0 at features, BIG elsewhere.
 const BIG = 1e20;
-function edt(grid, W, H) {
-  const n = Math.max(W, H);
-  const f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
-  const dt1 = (len) => {
-    let k = 0; v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
-    for (let q = 1; q < len; q++) {
-      let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
-      while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
-      k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
-    }
-    k = 0;
-    for (let q = 0; q < len; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
-  };
-  for (let x = 0; x < W; x++) {
-    for (let y = 0; y < H; y++) f[y] = grid[y * W + x];
-    dt1(H);
-    for (let y = 0; y < H; y++) grid[y * W + x] = d[y];
-  }
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) f[x] = grid[y * W + x];
-    dt1(W);
-    for (let x = 0; x < W; x++) grid[y * W + x] = d[x];
-  }
-  return grid;
-}
-// Signed distance in metres: positive on land, negative at sea.
-function signedDistance(isLand, W, H, cell) {
-  const a = new Float64Array(W * H), b = new Float64Array(W * H);
-  for (let i = 0; i < W * H; i++) { a[i] = isLand[i] ? 0 : BIG; b[i] = isLand[i] ? BIG : 0; }
-  edt(a, W, H); edt(b, W, H);
-  const sd = new Float32Array(W * H);
-  for (let i = 0; i < W * H; i++) sd[i] = isLand[i] ? Math.sqrt(b[i]) * cell : -Math.sqrt(a[i]) * cell;
-  return sd;
-}
-
-// Offshore depth profile (m, positive down) for distance d (m) from the low-water shoreline.
-// Gentle ~1:80 intertidal slope, flattening offshore, with two shore-parallel sandbars on sandy coast.
-function seaDepth(d, sandy, n) {
-  let depth = 6 * (1 - Math.exp(-d / 650)) + 0.0035 * d;
-  const bars = 0.75 * Math.exp(-(((d - 190) / 70) ** 2)) + 0.55 * Math.exp(-(((d - 430) / 110) ** 2));
-  depth -= bars * sandy * (0.7 + 0.6 * n);
-  return depth;
-}
 
 // ---------------------------------------------------------------------------
-// Procedural model of the Saunton coast (approximate, hand-drawn from memory of the map)
+// Baked survey data: elevation + seabed (int16 decimetres), Sentinel-2 imagery, ESA WorldCover classes
 // ---------------------------------------------------------------------------
-const EXT = 3900;
-const COAST = [ // land polygon, local metres (x east, z south); north block
-  [EXT, -EXT], [-2500, -EXT], [-2750, -3560], [-2350, -3420], [-1700, -3330], [-1050, -3200], [-720, -3010],
-  [-880, -2760], [-1480, -2520], [-1150, -2330], [-420, -2170], [180, -2030], [560, -1880],
-  [640, -1450], [670, -600], [690, 400], [705, 1400], [725, 2250], [860, 2720], [1500, 2860],
-  [2600, 2880], [EXT, 2830],
-];
-const COAST_S = [[EXT, 3470], [2300, 3460], [1500, 3560], [1150, EXT], [EXT, EXT]];
-
-function chaikin(pts, iters, closed = true) {
-  let p = pts;
-  for (let it = 0; it < iters; it++) {
-    const out = [];
-    for (let i = 0; i < p.length; i++) {
-      const a = p[i], b = p[(i + 1) % p.length];
-      if (!closed && i === p.length - 1) { out.push(a); break; }
-      out.push([0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]], [0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]]);
-    }
-    p = out;
-  }
-  return p;
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error('Could not load ' + url));
+    im.src = url;
+  });
 }
-
-async function buildModelLand(N, progress) {
-  progress('Shaping the coastline');
+async function loadBaked(progress) {
+  progress('Loading survey data');
+  const res = await fetch(DATA + 'meta.json');
+  if (!res.ok) throw new Error('meta.json ' + res.status);
+  const meta = await res.json();
+  META = meta;
+  LAT0 = meta.lat0; LON0 = meta.lon0; M_LAT = meta.mPerDegLat; M_LON = meta.mPerDegLon;
+  const [buf, imagery, landcover] = await Promise.all([
+    fetch(DATA + meta.elevation.file).then(r => { if (!r.ok) throw new Error('terrain ' + r.status); return r.arrayBuffer(); }),
+    loadImage(DATA + meta.imagery.file),
+    loadImage(DATA + meta.landcover.file),
+  ]);
+  progress('Shaping the coast');
   await nextFrame();
-  const xmin = -EXT, zmin = -EXT, cell = (2 * EXT) / (N - 1);
-  // Rasterise the coastline polygons
-  const cv = document.createElement('canvas'); cv.width = N; cv.height = N;
-  const cx = cv.getContext('2d', { willReadFrequently: true });
-  cx.fillStyle = '#000'; cx.fillRect(0, 0, N, N);
-  cx.fillStyle = '#fff';
-  for (const poly of [COAST, COAST_S]) {
-    const sm = chaikin(poly, 4);
-    cx.beginPath();
-    sm.forEach(([x, z], i) => {
-      // wobble the coastline a little so it does not look drawn with a ruler
-      const w = (fbm(x / 260, z / 260, 3) - 0.5) * 60;
-      const px = (x + w - xmin) / cell + 0.5, pz = (z + w * 0.6 - zmin) / cell + 0.5;
-      i ? cx.lineTo(px, pz) : cx.moveTo(px, pz);
-    });
-    cx.closePath(); cx.fill();
-  }
-  const img = cx.getImageData(0, 0, N, N).data;
-  const isLand = new Uint8Array(N * N);
-  for (let i = 0; i < N * N; i++) isLand[i] = img[i * 4] > 127 ? 1 : 0;
-  const sd = signedDistance(isLand, N, N, cell);
-
-  progress('Raising dunes and headland');
-  await nextFrame();
-  const bed = new Float32Array(N * N);
-  for (let j = 0; j < N; j++) {
-    const z = zmin + j * cell;
-    for (let i = 0; i < N; i++) {
-      const x = xmin + i * cell, s = sd[j * N + i];
-      bed[j * N + i] = modelElevation(x, z, s);
-    }
-  }
-  return { kind: 'model', W: N, H: N, xmin, zmin, xmax: xmin + cell * (N - 1), zmax: zmin + cell * (N - 1), cell, bed, sd };
-}
-
-function regionWeights(x, z) {
-  const croyde = Math.exp(-(((x + 800) / 420) ** 2) - (((z + 3020) / 330) ** 2));
-  const rock = smooth(-1600, -1950, z) * (1 - smooth(0.25, 0.7, croyde));
-  const dunesAlong = smooth(-1750, -1250, z) * (1 - smooth(2350, 2800, z));
-  return { rock, dunesAlong, croyde };
-}
-
-function modelElevation(x, z, s) {
-  const { rock, dunesAlong } = regionWeights(x, z);
-  const n1 = fbm(x / 140, z / 140, 4);
-  if (s <= 0) {
-    const d = -s;
-    let depth = seaDepth(d, 1 - rock, fbm(x / 600, z / 900, 2));
-    // reefs and rock platforms off the headland
-    depth -= rock * (fbm(x / 120, z / 120, 4) - 0.35) * 2.5 * Math.exp(-d / 500);
-    // sand ripples on the bed
-    depth += 0.15 * Math.sin(x / 9 + n1 * 6) * (1 - rock);
-    return -Math.max(depth, -0.6);
-  }
-  // Beach face: same gentle gradient carried up the intertidal zone to the dry upper beach
-  const beach = Math.min(s * 0.0125, 4.6) + Math.max(0, s - 368) * 0.004;
-  // Braunton Burrows: hummocky dune field behind the beach
-  const duneEnv = smooth(260, 520, s) * (1 - smooth(1500, 2300, s)) * dunesAlong;
-  const ridges = 1 - Math.abs(2 * fbm(x / 190, z / 120, 4) - 1);
-  const dunes = 5 + 24 * Math.pow(ridges, 1.6) * (0.55 + 0.45 * fbm(x / 800, z / 800, 2));
-  let e = Math.max(beach, lerp(beach, dunes, duneEnv));
-  // Farmland and marsh inland
-  const farm = 4 + 22 * fbm(x / 1600, z / 1600, 3) + Math.max(0, x - 2300) * 0.012 + Math.max(0, -z - 800) * 0.02;
-  e = lerp(e, Math.max(e, farm), smooth(1300, 2400, s) * (1 - rock));
-  // Saunton Down and Baggy Point: steep, grassy headlands ending in low cliffs
-  const down = 145 * Math.exp(-(((x + 150) / 1350) ** 2) - (((z + 2700) / 720) ** 2))
-             + 105 * Math.exp(-(((x + 2000) / 1000) ** 2) - (((z + 3650) / 420) ** 2))
-             + 60 * Math.exp(-(((x - 1600) / 1500) ** 2) - (((z + 2600) / 900) ** 2));
-  const hill = (down + 12 * n1) * smooth(0, 220, s) + Math.min(s * 0.05, 6);
-  e = lerp(e, Math.max(e * 0.4, hill), rock);
-  // hills step down gently behind the beach's north end too
-  e = Math.max(e, down * smooth(1200, 2600, s + Math.max(0, -z - 1500)) * 0.85);
-  return e + (n1 - 0.5) * 1.2 * smooth(0, 40, s);
-}
-
-// Colour texture for the procedural model: sand, wet sand, marram dunes, heath, hedged fields.
-async function paintModel(land, size, progress) {
-  progress('Painting sand and fields');
-  await nextFrame();
-  const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
-  const ctx = cv.getContext('2d');
-  const img = ctx.createImageData(size, size);
-  const px = img.data;
-  const { W, cell, bed, sd } = land;
-  const sample = (arr, gx, gz) => {
-    const i = Math.min(W - 2, Math.max(0, Math.floor(gx))), j = Math.min(W - 2, Math.max(0, Math.floor(gz)));
-    const fx = gx - i, fz = gz - j, o = j * W + i;
-    return lerp(lerp(arr[o], arr[o + 1], fx), lerp(arr[o + W], arr[o + W + 1], fx), fz);
+  const dv = new DataView(buf), n = meta.W * meta.H, bed = new Float32Array(n);
+  for (let i = 0; i < n; i++) bed[i] = dv.getInt16(i * 2, true) * meta.elevation.scale;
+  return {
+    W: meta.W, H: meta.H, cell: meta.cell, xmin: meta.xmin, zmin: meta.zmin, xmax: meta.xmax, zmax: meta.zmax,
+    bed, imagery, landcover,
   };
-  const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
-  const C = {
-    deep: [62, 74, 66], seabed: [128, 116, 90], wet: [176, 158, 124], dry: [224, 208, 174], strand: [112, 98, 78],
-    marram: [150, 150, 104], slack: [84, 106, 62], scrub: [58, 76, 44], grass: [92, 122, 62], heath: [104, 96, 58],
-    gorse: [56, 72, 40], rock: [138, 130, 116], darkRock: [98, 92, 82], hedge: [40, 58, 32],
-  };
-  const fields = [[96, 128, 66], [118, 140, 72], [140, 132, 86], [84, 112, 58], [156, 146, 98], [108, 124, 70], [126, 112, 80]];
-  const scale = (W - 1) / (size - 1);
-  for (let y = 0; y < size; y++) {
-    if (y % 128 === 0) await nextFrame();
-    for (let x = 0; x < size; x++) {
-      const gx = x * scale, gz = y * scale;
-      const wx = land.xmin + gx * cell, wz = land.zmin + gz * cell;
-      const e = sample(bed, gx, gz), s = sample(sd, gx, gz);
-      const ex = sample(bed, gx + 1, gz) - sample(bed, gx - 1, gz), ez = sample(bed, gx, gz + 1) - sample(bed, gx, gz - 1);
-      const slope = Math.hypot(ex, ez) / (2 * cell);
-      const { rock, dunesAlong } = regionWeights(wx, wz);
-      const n = fbm(wx / 30, wz / 30, 3), n2 = fbm(wx / 160, wz / 160, 3), fine = hash2(x, y) - 0.5;
-      let c;
-      if (s <= 0) {
-        c = mix3(C.seabed, C.deep, smooth(2, 14, -e));
-        c = mix3(c, C.darkRock, rock * smooth(0.45, 0.7, fbm(wx / 60, wz / 60, 3)));
-      } else if (e < 4.4 && rock < 0.5) {
-        c = mix3(C.wet, C.dry, smooth(3.2, 4.3, e));
-        c = mix3(c, C.strand, Math.exp(-(((e - 3.9) / 0.12) ** 2)) * 0.7 * n);
-        c = mix3(c, mix3(c, [96, 86, 66], 0.5), 0.25 * Math.sin(wx / 7 + n * 8) ** 8);
-      } else {
-        const veg = smooth(0.2, 0.75, n2 + (s - 450) / 900);
-        const dune = mix3(mix3(C.dry, C.marram, veg), C.slack, smooth(9, 5, e) * veg * 0.8);
-        const dScrub = mix3(dune, C.scrub, smooth(0.62, 0.8, fbm(wx / 90, wz / 90, 3)) * veg);
-        // Field patchwork with hedgerows (Voronoi on a jittered grid)
-        const fx = wx / 190, fz = wz / 150;
-        const ix = Math.floor(fx), iz = Math.floor(fz);
-        let d1 = 1e9, d2 = 1e9, id = 0;
-        for (let oz = -1; oz <= 1; oz++) for (let ox = -1; ox <= 1; ox++) {
-          const cxp = ix + ox + 0.15 + 0.7 * hash2(ix + ox, iz + oz), czp = iz + oz + 0.15 + 0.7 * hash2(iz + oz + 77, ix + ox - 31);
-          const dd = Math.hypot((fx - cxp) * 190, (fz - czp) * 150);
-          if (dd < d1) { d2 = d1; d1 = dd; id = hash2(ix + ox + 5, iz + oz + 9); } else if (dd < d2) d2 = dd;
-        }
-        let farm = fields[Math.floor(id * fields.length)].slice();
-        farm = mix3(farm, [farm[0] * 0.85, farm[1] * 0.9, farm[2] * 0.85], n);
-        farm = mix3(farm, C.hedge, smooth(7, 2, d2 - d1));
-        const farmW = smooth(1300, 2400, s) * (1 - rock);
-        let land = mix3(dScrub, farm, dunesAlong > 0.5 ? farmW : Math.max(farmW, 0.5));
-        // headland heath, gorse and cliffs
-        let head = mix3(C.grass, C.heath, smooth(0.4, 0.7, n2));
-        head = mix3(head, C.gorse, smooth(0.6, 0.78, fbm(wx / 45, wz / 45, 3)));
-        head = mix3(head, C.rock, smooth(0.8, 1.3, slope));
-        head = mix3(head, C.darkRock, smooth(40, 5, s) * 0.8);
-        c = mix3(land, head, rock);
-      }
-      const k = 1 + fine * 0.08;
-      const o = (y * size + x) * 4;
-      px[o] = clamp(c[0] * k, 0, 255); px[o + 1] = clamp(c[1] * k, 0, 255); px[o + 2] = clamp(c[2] * k, 0, 255); px[o + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  return cv;
 }
 
 // ---------------------------------------------------------------------------
-// Satellite imagery + elevation from a tile provider (needs the viewer's key)
+// Optional sharper imagery from a tile provider (needs the viewer's key).
+// Tiles are Web Mercator; the scene grid is equirectangular, so rows are remapped one by one.
 // ---------------------------------------------------------------------------
-const lon2tile = (lon, z) => Math.floor((lon + 180) / 360 * 2 ** z);
-const lat2tile = (lat, z) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** z); };
+const lon2tileF = (lon, z) => (lon + 180) / 360 * 2 ** z;
+const lat2tileF = (lat, z) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** z; };
 const tile2lon = (x, z) => x / 2 ** z * 360 - 180;
-const tile2lat = (y, z) => { const n = Math.PI - 2 * Math.PI * y / 2 ** z; return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); };
 
 const PROVIDERS = {
   mapbox: {
     name: 'Mapbox',
     sat: (z, x, y, k) => `https://api.mapbox.com/v4/mapbox.satellite/${z}/${x}/${y}@2x.jpg90?access_token=${encodeURIComponent(k)}`,
-    satPx: 512,
-    dem: (z, x, y, k) => `https://api.mapbox.com/v4/mapbox.terrain-rgb/${z}/${x}/${y}.pngraw?access_token=${encodeURIComponent(k)}`,
-    attrib: 'Imagery and elevation © Mapbox © OpenStreetMap contributors © Maxar',
+    attrib: 'Aerial imagery © Mapbox © OpenStreetMap contributors © Maxar.',
   },
   maptiler: {
     name: 'MapTiler',
     sat: (z, x, y, k) => `https://api.maptiler.com/tiles/satellite-v2/${z}/${x}/${y}.jpg?key=${encodeURIComponent(k)}`,
-    satPx: 512,
-    dem: (z, x, y, k) => `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.webp?key=${encodeURIComponent(k)}`,
-    attrib: 'Imagery and elevation © MapTiler © OpenStreetMap contributors',
+    attrib: 'Aerial imagery © MapTiler © OpenStreetMap contributors.',
   },
 };
 
@@ -585,89 +504,64 @@ async function fetchBitmap(url) {
   try { res = await fetch(url, { mode: 'cors' }); }
   catch (e) { const err = new Error('network'); err.kind = 'network'; throw err; }
   if (!res.ok) { const err = new Error('http ' + res.status); err.kind = 'http'; err.status = res.status; throw err; }
-  const blob = await res.blob();
-  return createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+  return createImageBitmap(await res.blob());
 }
 
-async function loadTileLand(providerId, key, maxTex, progress) {
+async function loadSharperImagery(providerId, key, land, maxTex, progress) {
   const P = PROVIDERS[providerId];
-  const zd = 14;
-  const tx0 = lon2tile(BOUNDS.lonW, zd), tx1 = lon2tile(BOUNDS.lonE, zd);
-  const ty0 = lat2tile(BOUNDS.latN, zd), ty1 = lat2tile(BOUNDS.latS, zd);
-  const nx = tx1 - tx0 + 1, ny = ty1 - ty0 + 1;
-  // Imagery one zoom deeper when the GPU can hold the bigger texture (≈1.5 m per pixel instead of ≈3 m)
-  const deeper = maxTex >= 8192 && !isSmall;
-  const zs = deeper ? zd + 1 : zd, f = deeper ? 2 : 1;
-  const tilePx = P.satPx;
-  const satCv = document.createElement('canvas');
-  satCv.width = nx * f * tilePx; satCv.height = ny * f * tilePx;
-  const sctx = satCv.getContext('2d');
-  const demPx = 256;
-  const demCv = document.createElement('canvas');
-  demCv.width = nx * demPx; demCv.height = ny * demPx;
-  const dctx = demCv.getContext('2d', { willReadFrequently: true });
-
+  const b = META.bounds;
+  const big = maxTex >= 8192 && !isSmall;
+  const z = big ? 15 : 14, TS = 512;
+  const tx0 = Math.floor(lon2tileF(b.west, z)), tx1 = Math.floor(lon2tileF(b.east, z));
+  const ty0 = Math.floor(lat2tileF(b.north, z)), ty1 = Math.floor(lat2tileF(b.south, z));
   const jobs = [];
-  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) jobs.push({ kind: 'dem', x, y });
-  for (let y = 0; y < ny * f; y++) for (let x = 0; x < nx * f; x++) jobs.push({ kind: 'sat', x, y });
+  for (let y = ty0; y <= ty1; y++) for (let x = tx0; x <= tx1; x++) jobs.push([x, y]);
+  const tiles = new Map();
   let done = 0;
-  const run = async (job) => {
-    if (job.kind === 'dem') {
-      const bm = await fetchBitmap(P.dem(zd, tx0 + job.x, ty0 + job.y, key));
-      dctx.drawImage(bm, job.x * demPx, job.y * demPx, demPx, demPx);
-    } else {
-      const bm = await fetchBitmap(P.sat(zs, tx0 * f + job.x, ty0 * f + job.y, key));
-      sctx.drawImage(bm, job.x * tilePx, job.y * tilePx, tilePx, tilePx);
-    }
-    done++;
-    progress(`Downloading tiles ${done}/${jobs.length}`);
+  const run = async ([x, y]) => {
+    tiles.set(x + ',' + y, await fetchBitmap(P.sat(z, x, y, key)));
+    progress(`Downloading imagery ${++done}/${jobs.length}`);
   };
-  // first tile alone, so a bad key fails fast with one request
-  await run(jobs[0]);
+  await run(jobs[0]); // a bad key fails on the first request
   let next = 1;
-  const workers = Array.from({ length: 6 }, async () => { while (next < jobs.length) await run(jobs[next++]); });
-  await Promise.all(workers);
+  await Promise.all(Array.from({ length: 6 }, async () => { while (next < jobs.length) await run(jobs[next++]); }));
 
-  progress('Decoding elevation');
+  progress('Fitting imagery to the terrain');
   await nextFrame();
-  const W = demCv.width, H = demCv.height;
-  const rgb = dctx.getImageData(0, 0, W, H).data;
-  const dem = new Float32Array(W * H);
-  for (let i = 0; i < W * H; i++) dem[i] = -10000 + (rgb[i * 4] * 65536 + rgb[i * 4 + 1] * 256 + rgb[i * 4 + 2]) * 0.1;
-
-  const nw = toLocal(tile2lat(ty0, zd), tile2lon(tx0, zd));
-  const se = toLocal(tile2lat(ty1 + 1, zd), tile2lon(tx1 + 1, zd));
-  const cellX = (se.x - nw.x) / W, cellZ = (se.z - nw.z) / H;
-  const cell = (cellX + cellZ) / 2;
-
-  // Sea = low cells connected to the open (west) edge. Inland marsh stays land.
-  progress('Mapping the shoreline');
-  await nextFrame();
-  const sea = new Uint8Array(W * H);
-  const stack = [];
-  for (let j = 0; j < H; j++) { const i = j * W; if (dem[i] <= 0.3) { sea[i] = 1; stack.push(i); } }
-  while (stack.length) {
-    const i = stack.pop(), x = i % W, y = (i / W) | 0;
-    const nb = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1];
-    for (const k of nb) if (k >= 0 && !sea[k] && dem[k] <= 0.3) { sea[k] = 1; stack.push(k); }
+  const spanX = land.xmax - land.xmin, spanZ = land.zmax - land.zmin;
+  const mPerPx = 40075016 * Math.cos(LAT0 * Math.PI / 180) / (2 ** z * TS);
+  const outW = Math.min(big ? 5120 : 4096, Math.round(spanX / mPerPx));
+  const outH = Math.round(outW * spanZ / spanX);
+  const cv = document.createElement('canvas'); cv.width = outW; cv.height = outH;
+  const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  for (let row = 0; row < outH; row++) {
+    const lat = b.north - (row + 0.5) / outH * (b.north - b.south);
+    const ty = lat2tileF(lat, z), tyi = Math.floor(ty), sy = Math.min(TS - 1, Math.floor((ty - tyi) * TS));
+    for (let tx = tx0; tx <= tx1; tx++) {
+      const bm = tiles.get(tx + ',' + tyi);
+      if (!bm) continue;
+      const lonA = tile2lon(tx, z), lonB = tile2lon(tx + 1, z);
+      const dxA = (lonA - b.west) / (b.east - b.west) * outW, dxB = (lonB - b.west) / (b.east - b.west) * outW;
+      ctx.drawImage(bm, 0, sy, TS, 1, dxA, row, dxB - dxA, 1);
+    }
   }
-  const isLand = new Uint8Array(W * H);
-  for (let i = 0; i < W * H; i++) isLand[i] = sea[i] ? 0 : 1;
-  const sd = signedDistance(isLand, W, H, cell);
-  // Elevation tiles carry little or no seabed detail here, so synthesise a plausible profile offshore
-  // and keep any deeper measured values.
-  const bed = new Float32Array(W * H);
-  for (let i = 0; i < W * H; i++) {
-    if (isLand[i]) { bed[i] = dem[i]; continue; }
-    const x = i % W, y = (i / W) | 0;
-    const n = fbm(x / 60, y / 90, 2);
-    bed[i] = Math.min(-seaDepth(-sd[i], 1, n), dem[i]);
-  }
-  return {
-    kind: providerId, attrib: P.attrib, W, H, cell,
-    xmin: nw.x + cell / 2, zmin: nw.z + cell / 2, xmax: nw.x + cell * (W - 0.5), zmax: nw.z + cell * (H - 0.5),
-    bed, sd, satCanvas: satCv,
-  };
+  tiles.forEach(t => t.close && t.close());
+  // Keep the aerial photo on land and beach only; below the imaged waterline the photo shows water,
+  // which would look wrong at low tide, so the built-in seabed colour shows there instead.
+  const mask = document.createElement('canvas'); mask.width = land.W; mask.height = land.H;
+  const mctx = mask.getContext('2d');
+  const md = mctx.createImageData(land.W, land.H);
+  const wl = (META.imagedWaterlineTideM ?? -1.8) - 0.2;
+  for (let i = 0; i < land.W * land.H; i++) md.data[i * 4 + 3] = land.bed[i] > wl ? 255 : 0;
+  mctx.putImageData(md, 0, 0);
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(mask, 0, 0, outW, outH);
+  const out = document.createElement('canvas'); out.width = outW; out.height = outH;
+  const octx = out.getContext('2d');
+  octx.drawImage(land.imagery, 0, 0, outW, outH);
+  octx.drawImage(cv, 0, 0);
+  return { canvas: out, attrib: P.attrib };
 }
 
 // ---------------------------------------------------------------------------
@@ -691,6 +585,31 @@ function sampleGrid(land, arr, x, z) {
   const gx = clamp((x - land.xmin) / land.cell, 0, land.W - 1.001), gz = clamp((z - land.zmin) / land.cell, 0, land.H - 1.001);
   const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j, o = j * land.W + i;
   return lerp(lerp(arr[o], arr[o + 1], fx), lerp(arr[o + land.W], arr[o + land.W + 1], fx), fz);
+}
+
+// Fraction of each wet cell reachable by a straight ray arriving along (dx, dz) from outside the grid.
+// Swept in travel order; interpolation between neighbours softens shadow edges with distance.
+function openness(wet, Gx, Gz, dx, dz) {
+  const o = new Float32Array(Gx * Gz);
+  const ax = Math.abs(dx), az = Math.abs(dz);
+  const is = dx >= 0 ? 1 : -1, js = dz >= 0 ? 1 : -1;
+  const at = (i, j) => (i < 0 || j < 0 || i >= Gx || j >= Gz) ? 1 : o[j * Gx + i];
+  for (let jj = 0; jj < Gz; jj++) {
+    const j = js > 0 ? jj : Gz - 1 - jj;
+    for (let ii = 0; ii < Gx; ii++) {
+      const i = is > 0 ? ii : Gx - 1 - ii;
+      const c = j * Gx + i;
+      if (!wet[c]) { o[c] = 0; continue; }
+      if (ax >= az) {
+        const t = az / Math.max(ax, 1e-9);
+        o[c] = (1 - t) * at(i - is, j) + t * at(i - is, j - js);
+      } else {
+        const t = ax / Math.max(az, 1e-9);
+        o[c] = (1 - t) * at(i, j - js) + t * at(i - is, j - js);
+      }
+    }
+  }
+  return o;
 }
 
 function buildWaveField(land, res, sea, T, fromDeg) {
@@ -750,8 +669,19 @@ function buildWaveField(land, res, sea, T, fromDeg) {
     const gx = R - L, gz = D - U;
     if (gx * gx + gz * gz > 1e-12) ang[o] = Math.atan2(gz, gx);
     const c = Math.cos(ang[o] - ang0);
-    kr[o] = clamp(Math.sqrt(Math.max(c, 0.02)), 0.12, 1);
+    kr[o] = 0.5 + 0.5 * Math.sqrt(Math.max(c, 0));
   }
+  // Headland shelter: how open each cell is to the swell, cast over a ±20° directional spread
+  const spread = [[-20, 0.5], [-10, 0.8], [0, 1], [10, 0.8], [20, 0.5]];
+  const open = new Float32Array(n);
+  let wsum = 0;
+  for (const [deg, wgt] of spread) {
+    const a = beta + deg * Math.PI / 180;
+    const o1 = openness(wet, Gx, Gz, Math.sin(a), -Math.cos(a));
+    for (let o = 0; o < n; o++) open[o] += o1[o] * wgt;
+    wsum += wgt;
+  }
+  for (let o = 0; o < n; o++) kr[o] *= open[o] / wsum;
   // Carry the phase a little way inland so swash can run up the sand; fill unreached water
   const kLand = waveNumber(0.4, omega);
   let frontier = [];
@@ -856,7 +786,7 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.4, 90
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.maxDistance = 14000;
+controls.maxDistance = 20000;
 controls.minDistance = 3;
 controls.maxPolarAngle = Math.PI * 0.495;
 
@@ -939,6 +869,7 @@ const oceanUniforms = {
   uK0: { value: 0 },
   uKRef: { value: 0 },
   uD0: { value: new THREE.Vector2(1, 0) },
+  uWind: { value: new THREE.Vector2(1, 0) },
   uChop: { value: 0.35 },
   uWave: { value: null },
   uWaveOrigin: { value: new THREE.Vector2() },
@@ -952,7 +883,7 @@ const oceanUniforms = {
 
 const GLSL_WAVES = /* glsl */`
 uniform float uTime, uPhaseT, uGroupPhase, uSea, uH0, uOmega, uK0, uKRef, uChop, uWaveCell;
-uniform vec2 uD0, uWaveOrigin, uWaveSize;
+uniform vec2 uD0, uWind, uWaveOrigin, uWaveSize;
 uniform sampler2D uWave;
 
 vec4 waveTexel(vec2 p, out vec2 pc) {
@@ -1018,7 +949,7 @@ vec3 waveDisp(vec2 p, float lod, out WaveInfo info) {
   // wind chop, damped in the surf zone and very shallow water
   float att = uChop * smoothstep(0.15, 2.5, h) * (1.0 - 0.55 * br) * lod;
   vec2 d1 = vec2(cos(-0.45), sin(-0.45)), d2 = vec2(cos(0.35), sin(0.35)), d3 = vec2(cos(1.0), sin(1.0));
-  mat2 rot = mat2(uD0.x, uD0.y, -uD0.y, uD0.x);
+  mat2 rot = mat2(uWind.x, uWind.y, -uWind.y, uWind.x);  // chop runs with the wind
   vec3 chop = vec3(0.0);
   gerstner(p, rot * d1, 23.0, 0.20 * att, 0.6, 1.0, chop);
   gerstner(p, rot * d2, 13.5, 0.11 * att, 0.6, 1.0, chop);
@@ -1173,19 +1104,33 @@ let ocean = null;
 // ---------------------------------------------------------------------------
 // Terrain meshes
 // ---------------------------------------------------------------------------
-const terrainUniforms = { uSea: oceanUniforms.uSea, uWetH: { value: 0.9 } };
+const terrainUniforms = { uSea: oceanUniforms.uSea, uWetH: { value: 0.9 }, uLandcover: { value: null } };
+// Imagery is 10 m per pixel, so close up the terrain adds fine variation by ESA WorldCover class.
 function terrainMaterial(map) {
   const m = new THREE.MeshStandardMaterial({ map, roughness: 0.93, metalness: 0 });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uSea = terrainUniforms.uSea;
     sh.uniforms.uWetH = terrainUniforms.uWetH;
+    sh.uniforms.uLandcover = terrainUniforms.uLandcover;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vWY;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWY = (modelMatrix * vec4(transformed, 1.0)).y;');
+      .replace('#include <common>', '#include <common>\nvarying float vWY;\nvarying vec2 vWXZ;\nvarying float vViewDist;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvec4 wpos4 = modelMatrix * vec4(transformed, 1.0);\nvWY = wpos4.y; vWXZ = wpos4.xz; vViewDist = length(wpos4.xyz - cameraPosition);');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vWY;\nuniform float uSea;\nuniform float uWetH;')
-      .replace('#include <map_fragment>', '#include <map_fragment>\nfloat wet = smoothstep(uSea + uWetH, uSea + 0.05, vWY);\ndiffuseColor.rgb *= mix(1.0, 0.72, wet);')
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.22, wet);');
+      .replace('#include <common>', '#include <common>\nvarying float vWY;\nvarying vec2 vWXZ;\nvarying float vViewDist;\nuniform float uSea;\nuniform float uWetH;\nuniform sampler2D uLandcover;\n' + GLSL_NOISE)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        float code = floor(texture2D(uLandcover, vMapUv).r * 255.0 + 0.5);
+        float dfade = 1.0 - smoothstep(80.0, 1200.0, vViewDist);
+        vec2 wp = vWXZ;
+        float n1 = vnoise(wp * 0.9), n2 = vnoise(wp * 0.21 + 7.0), n3 = vnoise(wp * 3.7);
+        float det = 0.0;
+        if (code > 59.5 && code < 61.5) { det = (n3 - 0.5) * 0.08 + (n1 - 0.5) * 0.06; diffuseColor.rgb *= vec3(1.07, 1.0, 0.88); }
+        else if (abs(code - 10.0) < 0.5) det = (n2 - 0.5) * 0.4 + (n1 - 0.5) * 0.18;
+        else if (abs(code - 40.0) < 0.5) det = (vnoise(vec2(wp.x * 0.4, wp.y * 3.0)) - 0.5) * 0.12 + (n3 - 0.5) * 0.06;
+        else if (code > 0.5 && code < 99.5) det = (n1 - 0.5) * 0.2 + (n3 - 0.5) * 0.1;
+        diffuseColor.rgb *= 1.0 + det * dfade;
+        float wet = smoothstep(uSea + uWetH, uSea + 0.05, vWY);
+        diffuseColor.rgb *= mix(1.0, 0.72, wet);`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.38, wet);');
   };
   return m;
 }
@@ -1218,8 +1163,20 @@ function buildTerrainMesh(land, colorTex, segs) {
 }
 
 // Low-detail apron that carries the edge of the map out to the horizon, so land does not end in a cliff.
-function buildApron(land, colorTex) {
+function buildApron(land, colorSrc) {
   const N = 80, R = 45000;
+  // a heavily blurred copy of the imagery colours the apron, so the map edge doesn't streak outwards
+  const SW = 48, SH = Math.round(48 * (land.zmax - land.zmin) / (land.xmax - land.xmin));
+  const sc = document.createElement('canvas'); sc.width = SW; sc.height = SH;
+  const sctx = sc.getContext('2d', { willReadFrequently: true });
+  sctx.drawImage(colorSrc, 0, 0, SW, SH);
+  const px = sctx.getImageData(0, 0, SW, SH).data;
+  const colAt = (u, v) => {
+    const x = clamp(Math.round(u * (SW - 1)), 0, SW - 1), y = clamp(Math.round(v * (SH - 1)), 0, SH - 1), o = (y * SW + x) * 4;
+    return [px[o] / 255, px[o + 1] / 255, px[o + 2] / 255];
+  };
+  const col = new Float32Array((N + 1) * (N + 1) * 3);
+  let ci = 0;
   const cx = (land.xmin + land.xmax) / 2, cz = (land.zmin + land.zmax) / 2;
   const map = (t) => Math.sign(t) * R * Math.abs(t) ** 2.2;
   const pos = new Float32Array((N + 1) * (N + 1) * 3), uv = new Float32Array((N + 1) * (N + 1) * 2);
@@ -1232,6 +1189,9 @@ function buildApron(land, colorTex) {
     if (y > 0) y += 18 * (fbm(x / 3000, z / 3000, 3) - 0.3) * smooth(0, 3000, out);
     pos[o++] = x; pos[o++] = y; pos[o++] = z;
     uv[u++] = (xc - land.xmin) / (land.xmax - land.xmin); uv[u++] = 1 - (zc - land.zmin) / (land.zmax - land.zmin);
+    const c3 = colAt((xc - land.xmin) / (land.xmax - land.xmin), (zc - land.zmin) / (land.zmax - land.zmin));
+    const tint = 0.9 + 0.2 * fbm(x / 2500, z / 2500, 3);
+    for (let k = 0; k < 3; k++) col[ci++] = Math.pow(c3[k] * tint, 2.2);
   }
   const idx = new Uint32Array(N * N * 6);
   o = 0;
@@ -1242,28 +1202,39 @@ function buildApron(land, colorTex) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.computeVertexNormals();
-  const mesh = new THREE.Mesh(g, terrainMaterial(colorTex));
+  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }));
   mesh.receiveShadow = true;
   return mesh;
 }
 
 // ---------------------------------------------------------------------------
-// State, sun, UI
+
+// ---------------------------------------------------------------------------
+// State and sun
 // ---------------------------------------------------------------------------
 const state = {
-  land: null, terrain: null, apron: null, colorTex: null, waveTex: null, field: null,
-  H0: 1.6, T: 11, dir: 285, tide: 0.6, chop: 0.35, tod: 16, view: 'overview',
+  land: null, terrain: null, apron: null, colorTex: null, waveTex: null, field: null, field2: null,
+  H0: 1.2, T: 10, dir: 280, tide: 0, chop: 0.3, tod: 12, view: 'area',
+  windMph: null, gustMph: null, windFrom: 100, sec: null,
+  day: null, // 'YYYY-MM-DD' (Europe/London)
+  forecast: null, hourIndex: -1,
+  spots: [],
 };
 
 function londonOffsetHours(date) {
   try {
     const s = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', timeZoneName: 'shortOffset' }).formatToParts(date)
-      .find(p => p.type === 'timeZoneName').value; // "GMT" or "GMT+1"
+      .find(p => p.type === 'timeZoneName').value;
     const m = s.match(/GMT([+-]\d+)?/);
     return m && m[1] ? parseInt(m[1], 10) : 0;
   } catch { return 0; }
+}
+function londonDayISO(date) {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(date); }
+  catch { return date.toISOString().slice(0, 10); }
 }
 // Approximate solar position (U.S. Naval Observatory low-precision formulae), good to a fraction of a degree.
 function sunPosition(date, lat, lon) {
@@ -1282,12 +1253,13 @@ function sunPosition(date, lat, lon) {
   const az = Math.atan2(-Math.sin(H), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(H));
   return { el, az };
 }
-const today = new Date();
 function dateForTod(tod) {
-  const off = londonOffsetHours(today);
-  const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0));
-  return new Date(d.getTime() + (tod - off) * 3600000);
+  const [y, m, d] = (state.day || londonDayISO(new Date())).split('-').map(Number);
+  const noon = new Date(Date.UTC(y, m - 1, d, 12));
+  const off = londonOffsetHours(noon);
+  return new Date(Date.UTC(y, m - 1, d) + (tod - off) * 3600000);
 }
+const fmtTime = (h) => { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return `${String(hh + (mm === 60 ? 1 : 0)).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`; };
 
 const tmpC = new THREE.Color();
 function updateSun() {
@@ -1299,7 +1271,6 @@ function updateSun() {
   const sunCol = new THREE.Color(1.0, 0.96, 0.9).lerp(tmpC.setRGB(1.0, 0.42, 0.14), low).multiplyScalar(4.2 * smooth(-0.06, 0.1, s));
   const zen = new THREE.Color(0.006, 0.01, 0.026).lerp(tmpC.setRGB(0.12, 0.27, 0.62), day).lerp(tmpC.setRGB(0.16, 0.20, 0.42), low * 0.6);
   const hor = new THREE.Color(0.016, 0.022, 0.04).lerp(tmpC.setRGB(0.62, 0.74, 0.88), day).lerp(tmpC.setRGB(1.1, 0.56, 0.3), low * 0.8);
-  // a sun below the horizon still lights the sky a little
   const sd = dir.clone(); if (sd.y < 0.02) sd.y = 0.02; sd.normalize();
   skyUniforms.uSunDir.value.copy(dir);
   skyUniforms.uSunColor.value.copy(sunCol);
@@ -1308,7 +1279,10 @@ function updateSun() {
   const fogC = hor.clone().multiplyScalar(1.15);
   oceanUniforms.uFogColor.value.copy(fogC);
   scene.fog.color.copy(fogC);
-  sun.position.copy(sd).multiplyScalar(9000);
+  if (state.land) {
+    const cx = (state.land.xmin + state.land.xmax) / 2, cz = (state.land.zmin + state.land.zmax) / 2;
+    sun.position.set(cx, 0, cz).addScaledVector(sd, 9000);
+  } else sun.position.copy(sd).multiplyScalar(9000);
   sun.color.copy(sunCol).multiplyScalar(1 / 4.2);
   sun.intensity = 3.4 * smooth(-0.02, 0.12, s);
   hemi.color.copy(zen).lerp(hor, 0.5).multiplyScalar(1.6);
@@ -1316,22 +1290,24 @@ function updateSun() {
   scene.environmentIntensity = 0.35 + 0.65 * day;
   updateEnv();
   renderer.toneMappingExposure = 0.5 + 0.35 * (1 - day);
-  const hh = Math.floor(state.tod), mm = Math.round((state.tod - hh) * 60) % 60;
   const elDeg = el * 180 / Math.PI;
-  document.getElementById('roSun').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${elDeg >= 0 ? elDeg.toFixed(0) + '°' : 'set'}`;
-  document.getElementById('oTod').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  document.getElementById('roSun').textContent = `${fmtTime(state.tod)} · ${elDeg >= 0 ? elDeg.toFixed(0) + '°' : 'down'}`;
+  document.getElementById('oTod').textContent = fmtTime(state.tod);
 }
 
-const compass = (deg) => ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(((deg % 360) / 22.5)) % 16];
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+const compass = (deg) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
+const fmtH = (m) => `${m.toFixed(1)} m · ${(m * FT).toFixed(1)} ft`;
 function updateReadouts() {
-  document.getElementById('oSwellH').textContent = `${state.H0.toFixed(1)} m`;
+  document.getElementById('oSwellH').textContent = fmtH(state.H0);
   document.getElementById('oSwellT').textContent = `${state.T.toFixed(1)} s`;
-  document.getElementById('oSwellDir').textContent = `${state.dir}° ${compass(state.dir)}`;
-  document.getElementById('oTide').textContent = `${state.tide >= 0 ? '+' : ''}${state.tide.toFixed(1)} m`;
+  document.getElementById('oSwellDir').textContent = `${Math.round(state.dir)}° ${compass(state.dir)}`;
+  document.getElementById('oTide').textContent = `${state.tide >= 0 ? '+' : '−'}${Math.abs(state.tide).toFixed(1)} m`;
   document.getElementById('oChop').textContent = state.chop < 0.15 ? 'glassy' : state.chop < 0.5 ? 'light' : state.chop < 0.8 ? 'moderate' : 'choppy';
-  document.getElementById('roSwell').textContent = `${state.H0.toFixed(1)} m · ${state.T.toFixed(0)} s`;
-  document.getElementById('roDir').textContent = `${state.dir}° ${compass(state.dir)}`;
-  document.getElementById('roTide').textContent = `${state.tide >= 0 ? '+' : ''}${state.tide.toFixed(1)} m`;
+  document.getElementById('roSwell').textContent = `${state.H0.toFixed(1)} m ${state.T.toFixed(0)} s ${compass(state.dir)} ${Math.round(state.dir)}°`;
+  document.getElementById('roTide').textContent = `${state.tide >= 0 ? '+' : '−'}${Math.abs(state.tide).toFixed(1)} m`;
+  document.getElementById('roWind').textContent = state.windMph == null ? 'not set'
+    : `${Math.round(state.windMph)} mph ${compass(state.windFrom)}${state.gustMph != null ? ` · gusts ${Math.round(state.gustMph)}` : ''}`;
 }
 
 function applySeaUniforms() {
@@ -1341,14 +1317,18 @@ function applySeaUniforms() {
   oceanUniforms.uK0.value = omega * omega / G;
   oceanUniforms.uSea.value = state.tide;
   oceanUniforms.uChop.value = state.chop;
+  const toward = (state.windFrom + 180) * Math.PI / 180;
+  oceanUniforms.uWind.value.set(Math.sin(toward), -Math.cos(toward));
   terrainUniforms.uWetH.value = 0.25 + 0.45 * state.H0;
 }
 
+// ---------------------------------------------------------------------------
+// Wave field and breaking heights at the spots
+// ---------------------------------------------------------------------------
 function rebuildWaves() {
   const land = state.land;
   if (!land) return;
-  const res = isSmall ? 384 : 640;
-  const f = buildWaveField(land, res, state.tide, state.T, state.dir);
+  const f = buildWaveField(land, isSmall ? 448 : 768, state.tide, state.T, state.dir);
   state.field = f;
   if (state.waveTex) state.waveTex.dispose();
   const tex = new THREE.DataTexture(f.data, f.Gx, f.Gz, THREE.RGBAFormat, THREE.FloatType);
@@ -1362,11 +1342,232 @@ function rebuildWaves() {
   oceanUniforms.uWaveSize.value.set(f.Gx, f.Gz);
   oceanUniforms.uKRef.value = f.kRef;
   oceanUniforms.uD0.value.copy(f.d0);
+  state.field2 = state.sec ? buildWaveField(land, 320, state.tide, state.sec.T, state.sec.dir) : null;
+  updateSpots();
 }
 let waveTimer = 0;
-function scheduleWaves() { clearTimeout(waveTimer); waveTimer = setTimeout(rebuildWaves, 140); }
+function scheduleWaves() { clearTimeout(waveTimer); waveTimer = setTimeout(rebuildWaves, 120); }
 
-// Camera presets are placed relative to the waterline found in the data, so they work for model and satellite terrain.
+// Largest breaking wave (height at the break point) within reach of a spot, for one refracted swell.
+function breakingAt(f, H0, T, spot) {
+  if (!f || H0 <= 0) return 0;
+  const omega = 2 * Math.PI / T, cg0 = G / (2 * omega), R = 300;
+  const i0 = Math.max(0, Math.floor((spot.x - R - f.x0) / f.cs)), i1 = Math.min(f.Gx - 1, Math.ceil((spot.x + R - f.x0) / f.cs));
+  const j0 = Math.max(0, Math.floor((spot.z - R - f.z0) / f.cs)), j1 = Math.min(f.Gz - 1, Math.ceil((spot.z + R - f.z0) / f.cs));
+  let best = 0;
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const o = (j * f.Gx + i) * 4;
+    const h = state.tide - f.data[o + 1];
+    if (h < 0.15) continue;
+    const k = waveNumber(h, omega), kh = k * h;
+    const n = 0.5 * (1 + 2 * kh / Math.sinh(Math.min(2 * kh, 40)));
+    const Hp = H0 * Math.sqrt(cg0 / (n * omega / k)) * f.data[o + 3];
+    if (Hp / h < 0.6) continue;
+    best = Math.max(best, Math.min(Hp, 0.78 * h));
+  }
+  return best;
+}
+
+function windRelation(spot) {
+  if (state.windMph == null) return null;
+  if (state.windMph < 4) return 'glassy';
+  let d = Math.abs(((state.windFrom - spot.facing) % 360 + 540) % 360 - 180);
+  return d < 40 ? 'onshore' : d < 80 ? 'cross-onshore' : d < 110 ? 'cross-shore' : d < 145 ? 'cross-offshore' : 'offshore';
+}
+
+function updateSpots() {
+  const list = document.getElementById('spots');
+  const rows = state.spots.map(s => {
+    const h1 = breakingAt(state.field, state.H0, state.T, s);
+    const h2 = state.sec ? breakingAt(state.field2, state.sec.H, state.sec.T, s) : 0;
+    s.breaking = Math.sqrt(h1 * h1 + h2 * h2);
+    return s;
+  });
+  const max = Math.max(2, ...rows.map(s => s.breaking));
+  list.replaceChildren(...rows.map(s => {
+    const li = document.createElement('li');
+    const rel = windRelation(s);
+    li.innerHTML = `<span class="name"></span><span class="bar"><span style="width:${(s.breaking / max * 100).toFixed(0)}%"></span></span><span class="val">${s.breaking.toFixed(1)} m · ${(s.breaking * FT).toFixed(1)} ft</span>` +
+      (rel ? `<span class="wind" data-rel="${rel}">${rel} · beach faces ${compass(s.facing)}</span>` : '');
+    li.querySelector('.name').textContent = s.name;
+    return li;
+  }));
+  for (const s of state.spots) if (s.labelVal) s.labelVal.textContent = `${s.breaking.toFixed(1)} m`;
+}
+
+// Direction each beach faces, from where the sea lies around it.
+function initSpots() {
+  const L = state.land;
+  const labels = document.getElementById('labels');
+  labels.replaceChildren();
+  state.spots = (META.spots || []).map(sp => {
+    const p = toLocal(sp.lat, sp.lon);
+    let fx = 0, fz = 0;
+    for (let a = 0; a < 32; a++) for (const r of [200, 400, 700]) {
+      const dx = Math.cos(a / 32 * Math.PI * 2), dz = Math.sin(a / 32 * Math.PI * 2);
+      if (sampleGrid(L, L.bed, p.x + dx * r, p.z + dz * r) < -1) { fx += dx; fz += dz; }
+    }
+    const facing = ((Math.atan2(fx, -fz) * 180 / Math.PI) + 360) % 360;
+    const el = document.createElement('div');
+    el.className = 'spot-label';
+    el.innerHTML = '<div class="tag"><span></span><b></b></div><div class="stem"></div>';
+    el.querySelector('span').textContent = sp.name;
+    labels.appendChild(el);
+    return { name: sp.name, x: p.x, z: p.z, facing, breaking: 0, el, labelVal: el.querySelector('b') };
+  });
+}
+
+const projV = new THREE.Vector3();
+function updateLabels() {
+  const w = innerWidth, h = innerHeight;
+  for (const s of state.spots) {
+    const dist = camera.position.distanceTo(projV.set(s.x, 0, s.z));
+    projV.set(s.x, Math.max(groundAt(s.x, s.z), state.tide) + 25, s.z).project(camera);
+    const vis = projV.z < 1 && Math.abs(projV.x) < 0.9 && projV.y < 0.95 && projV.y > -1 && dist > 250;
+    s.el.style.display = vis ? '' : 'none';
+    if (vis) s.el.style.transform = `translate(${((projV.x + 1) / 2 * w).toFixed(1)}px, ${((1 - projV.y) / 2 * h).toFixed(1)}px) translate(-50%, -100%)`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Forecast (Open-Meteo, free for non-commercial use, no key)
+// ---------------------------------------------------------------------------
+const FC_SEA = { lat: 51.12, lon: -4.40 };   // open water west of Saunton
+const FC_LAND = { lat: 51.11, lon: -4.22 };
+async function loadForecast() {
+  const status = document.getElementById('fcStatus');
+  const marineVars = 'wave_height,swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction,wind_wave_height,sea_level_height_msl';
+  const mUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${FC_SEA.lat}&longitude=${FC_SEA.lon}&hourly=${marineVars}&timezone=Europe%2FLondon&forecast_days=7`;
+  const wUrl = `https://api.open-meteo.com/v1/forecast?latitude=${FC_LAND.lat}&longitude=${FC_LAND.lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=mph&timezone=Europe%2FLondon&forecast_days=7`;
+  try {
+    const [m, w] = await Promise.all([fetch(mUrl), fetch(wUrl)].map(p => p.then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })));
+    const t = m.hourly.time;
+    const wi = new Map(w.hourly.time.map((tt, i) => [tt, i]));
+    const pick = (arr, i) => (arr && arr[i] != null ? arr[i] : null);
+    const hours = t.map((tt, i) => {
+      const j = wi.get(tt);
+      return {
+        time: tt, day: tt.slice(0, 10), hour: parseInt(tt.slice(11, 13), 10),
+        H: pick(m.hourly.swell_wave_height, i) ?? pick(m.hourly.wave_height, i),
+        T: pick(m.hourly.swell_wave_period, i), dir: pick(m.hourly.swell_wave_direction, i),
+        H2: pick(m.hourly.secondary_swell_wave_height, i), T2: pick(m.hourly.secondary_swell_wave_period, i), dir2: pick(m.hourly.secondary_swell_wave_direction, i),
+        windWave: pick(m.hourly.wind_wave_height, i), tide: pick(m.hourly.sea_level_height_msl, i),
+        wind: j != null ? pick(w.hourly.wind_speed_10m, j) : null, windDir: j != null ? pick(w.hourly.wind_direction_10m, j) : null,
+        gust: j != null ? pick(w.hourly.wind_gusts_10m, j) : null,
+      };
+    }).filter(hh => hh.H != null && hh.T != null && hh.dir != null);
+    if (!hours.length) throw new Error('empty');
+    state.forecast = hours;
+    const hasTide = hours.some(hh => hh.tide != null);
+    status.dataset.tone = '';
+    status.textContent = `Open-Meteo, for a point ${Math.abs(FC_SEA.lon).toFixed(2)}°W offshore.` + (hasTide ? '' : ' No tide in this run, so set it under Try your own swell.');
+    buildDays();
+    const nowDay = londonDayISO(new Date());
+    const nowHour = parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' }).format(new Date()), 10);
+    let idx = hours.findIndex(hh => hh.day === nowDay && hh.hour === nowHour);
+    if (idx < 0) idx = 0;
+    selectHour(idx);
+  } catch (e) {
+    state.forecast = null;
+    status.dataset.tone = 'error';
+    status.textContent = "The live forecast couldn't be reached from this page (claude.ai previews block it). Open the page from GitHub Pages or a local server for the forecast; the sliders under Try your own swell still work.";
+    document.getElementById('days').hidden = true;
+    document.querySelector('.hour-row').hidden = true;
+    document.getElementById('tideCurve').hidden = true;
+    document.getElementById('tideTimes').hidden = true;
+    document.getElementById('ownSwell').open = true;
+  }
+}
+
+function buildDays() {
+  const days = [...new Set(state.forecast.map(h => h.day))];
+  const wrap = document.getElementById('days');
+  wrap.replaceChildren(...days.map(d => {
+    const hs = state.forecast.filter(h => h.day === d && h.hour >= 6 && h.hour <= 20).map(h => h.H);
+    const lo = Math.min(...hs), hi = Math.max(...hs);
+    const b = document.createElement('button');
+    b.className = 'day';
+    b.dataset.day = d;
+    const dt = new Date(d + 'T12:00:00Z');
+    const name = dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
+    b.innerHTML = `<span></span><span></span>`;
+    b.firstChild.textContent = name;
+    b.lastChild.textContent = hs.length ? `${(lo * FT).toFixed(0)}–${(hi * FT).toFixed(0)} ft` : '–';
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => {
+      const idx = state.forecast.findIndex(h => h.day === d && h.hour === (state.hourIndex >= 0 ? state.forecast[state.hourIndex].hour : 12));
+      selectHour(idx >= 0 ? idx : state.forecast.findIndex(h => h.day === d));
+    });
+    return b;
+  }));
+}
+
+function selectHour(idx) {
+  const h = state.forecast[idx];
+  if (!h) return;
+  state.hourIndex = idx;
+  state.day = h.day;
+  state.H0 = clamp(h.H, 0.2, 5);
+  state.T = clamp(h.T, 5, 20);
+  state.dir = h.dir;
+  if (h.tide != null) state.tide = clamp(h.tide, -4, 4);
+  state.windMph = h.wind; state.gustMph = h.gust;
+  if (h.windDir != null) state.windFrom = h.windDir;
+  state.chop = clamp(Math.max((h.windWave ?? 0) / 1.2, (h.wind ?? 0) / 28), 0, 1);
+  state.sec = h.H2 != null && h.H2 > 0.15 && h.T2 && h.dir2 != null ? { H: h.H2, T: clamp(h.T2, 5, 20), dir: h.dir2 } : null;
+  state.tod = h.hour;
+  for (const [id, key] of [['swellH', 'H0'], ['swellT', 'T'], ['swellDir', 'dir'], ['tide', 'tide'], ['chop', 'chop'], ['tod', 'tod']]) document.getElementById(id).value = state[key];
+  document.getElementById('hour').value = h.hour;
+  document.getElementById('oHour').textContent = fmtTime(h.hour);
+  document.querySelectorAll('.day').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.day === h.day)));
+  updateReadouts();
+  applySeaUniforms();
+  updateSun();
+  drawTide();
+  scheduleWaves();
+}
+
+function drawTide() {
+  const cv = document.getElementById('tideCurve');
+  const fc = state.forecast;
+  if (!fc || cv.hidden) return;
+  const hrs = fc.filter(h => h.day === state.day && h.tide != null);
+  const dpr = Math.min(devicePixelRatio, 2), w = cv.clientWidth, hgt = cv.clientHeight;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(hgt * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, hgt);
+  const times = document.getElementById('tideTimes');
+  if (hrs.length < 3) { times.textContent = 'No tide in this forecast run.'; return; }
+  const all = fc.filter(h => h.tide != null).map(h => h.tide);
+  const lo = Math.min(...all), hi = Math.max(...all);
+  const X = (hr) => 4 + hr / 23 * (w - 8), Y = (v) => hgt - 6 - (v - lo) / Math.max(hi - lo, 0.1) * (hgt - 14);
+  const css = getComputedStyle(document.documentElement);
+  ctx.beginPath();
+  hrs.forEach((h, i) => (i ? ctx.lineTo(X(h.hour), Y(h.tide)) : ctx.moveTo(X(h.hour), Y(h.tide))));
+  ctx.lineWidth = 1.5; ctx.strokeStyle = css.getPropertyValue('--focus'); ctx.stroke();
+  ctx.lineTo(X(hrs[hrs.length - 1].hour), hgt); ctx.lineTo(X(hrs[0].hour), hgt); ctx.closePath();
+  ctx.globalAlpha = 0.15; ctx.fillStyle = css.getPropertyValue('--focus'); ctx.fill(); ctx.globalAlpha = 1;
+  const cur = state.forecast[state.hourIndex];
+  if (cur && cur.tide != null) {
+    ctx.fillStyle = css.getPropertyValue('--accent');
+    ctx.beginPath(); ctx.arc(X(cur.hour), Y(cur.tide), 4, 0, Math.PI * 2); ctx.fill();
+  }
+  // high and low waters, refined with a parabola through the hourly values
+  const ev = [];
+  for (let i = 1; i < hrs.length - 1; i++) {
+    const a = hrs[i - 1].tide, b = hrs[i].tide, c = hrs[i + 1].tide;
+    if ((b >= a && b > c) || (b <= a && b < c)) {
+      const den = a - 2 * b + c, off = den !== 0 ? clamp(0.5 * (a - c) / den, -0.5, 0.5) : 0;
+      ev.push(`${b > a ? 'HW' : 'LW'} ${fmtTime(hrs[i].hour + off)}`);
+    }
+  }
+  times.replaceChildren(...ev.map(t => Object.assign(document.createElement('span'), { textContent: t })));
+}
+
+// ---------------------------------------------------------------------------
+// Camera views
+// ---------------------------------------------------------------------------
 function groundAt(x, z) { return state.land ? sampleGrid(state.land, state.land.bed, x, z) : 0; }
 function shorelineX(z, level = state.tide) {
   const L = state.land;
@@ -1374,7 +1575,7 @@ function shorelineX(z, level = state.tide) {
   return 0;
 }
 function breakX(z) {
-  const xs = shorelineX(z), need = 1.6 * state.H0 / 0.78;
+  const xs = shorelineX(z), need = 1.5 * state.H0 / 0.78;
   for (let x = xs; x > state.land.xmin; x -= 5) if (state.tide - groundAt(x, z) > need) return x;
   return xs - 300;
 }
@@ -1391,68 +1592,86 @@ function flyTo(pos, target, ms = 1600) {
     return t >= 1;
   });
 }
+function spotByName(n) { return state.spots.find(s => s.name.startsWith(n)) || { x: 0, z: 0 }; }
 function setView(name, instant = false) {
   state.view = name;
   document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === name)));
-  const zMid = toLocal(51.100, LON0).z;
-  const xs = shorelineX(zMid);
+  const sa = spotByName('Saunton'), cr = spotByName('Croyde');
+  const zs = sa.z, xs = shorelineX(zs);
+  const L = state.land;
   let pos, tgt;
-  if (name === 'overview') {
-    pos = new THREE.Vector3(xs - 3300, 820, zMid + 2300);
-    tgt = new THREE.Vector3(xs + 200, 0, zMid - 500);
+  if (name === 'area') {
+    tgt = new THREE.Vector3(xs - 300, 0, (sa.z + cr.z) / 2);
+    pos = tgt.clone().add(new THREE.Vector3(-5600, 2700, 4600));
+  } else if (name === 'saunton') {
+    tgt = new THREE.Vector3(xs + 150, 2, zs);
+    pos = new THREE.Vector3(xs - 1100, 380, zs + 1300);
   } else if (name === 'beach') {
-    const z = zMid + 150, x = xs + 45;
+    const z = zs + 100, x = xs + 45;
     pos = new THREE.Vector3(x, Math.max(groundAt(x, z), state.tide) + 1.7, z);
     tgt = new THREE.Vector3(xs - 420, state.tide + 0.8, z - 120);
   } else if (name === 'lineup') {
-    const z = zMid - 200, xb = breakX(z);
-    pos = new THREE.Vector3(xb - 45, state.tide + 1.4, z + 20);
+    const z = zs - 150, xb = breakX(z);
+    pos = new THREE.Vector3(xb - 40, state.tide + 1.4, z + 20);
     tgt = new THREE.Vector3(xs + 220, state.tide + 6, z - 80);
+  } else if (name === 'down') {
+    const p = toLocal(51.1235, -4.2190);
+    pos = new THREE.Vector3(p.x, groundAt(p.x, p.z) + 30, p.z);
+    tgt = new THREE.Vector3(shorelineX(zs + 800, 0) - 100, state.tide, zs + 800);
   } else {
-    const hz = zMid - 2050, hx = shorelineX(hz, 3.5) + 300;
-    pos = new THREE.Vector3(hx, groundAt(hx, hz) + 45, hz);
-    tgt = new THREE.Vector3(shorelineX(zMid + 900, 0) - 150, state.tide, zMid + 900);
+    const cx = (L.xmin + L.xmax) / 2, cz = (L.zmin + L.zmax) / 2;
+    tgt = new THREE.Vector3(cx, 0, cz);
+    pos = new THREE.Vector3(cx, 12500, cz + 900);
   }
   if (instant) { camera.position.copy(pos); controls.target.copy(tgt); controls.update(); }
   else flyTo(pos, tgt);
 }
 
+// ---------------------------------------------------------------------------
+// Scene assembly
+// ---------------------------------------------------------------------------
 const loadingEl = document.getElementById('loading'), loadingText = document.getElementById('loadingText');
 const progress = (t) => { loadingText.textContent = t; };
-function setAttribution(text) {
-  document.getElementById('attrib').textContent = text;
-  document.getElementById('attribInline').textContent = text;
-}
 
-async function installLand(land, colorCanvas) {
-  state.land = land;
-  if (state.terrain) { scene.remove(state.terrain); state.terrain.geometry.dispose(); state.terrain.material.dispose(); }
-  if (state.apron) { scene.remove(state.apron); state.apron.geometry.dispose(); state.apron.material.dispose(); }
+function setColorSource(src) {
   if (state.colorTex) state.colorTex.dispose();
-  const tex = new THREE.CanvasTexture(colorCanvas);
+  const tex = src instanceof HTMLCanvasElement ? new THREE.CanvasTexture(src) : new THREE.Texture(src);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.needsUpdate = true;
   state.colorTex = tex;
+  if (state.terrain) state.terrain.material.map = tex;
+  return tex;
+}
+
+async function installLand(land) {
+  state.land = land;
+  const tex = setColorSource(land.imagery);
+  const lc = new THREE.Texture(land.landcover);
+  lc.colorSpace = THREE.NoColorSpace;
+  lc.minFilter = lc.magFilter = THREE.NearestFilter;
+  lc.generateMipmaps = false;
+  lc.needsUpdate = true;
+  terrainUniforms.uLandcover.value = lc;
   progress('Building the terrain');
   await nextFrame();
-  state.terrain = buildTerrainMesh(land, tex, isSmall ? 384 : 768);
-  state.apron = buildApron(land, tex);
+  state.terrain = buildTerrainMesh(land, tex, isSmall ? 448 : 894);
+  state.apron = buildApron(land, land.imagery);
   scene.add(state.terrain, state.apron);
-  // shadow camera covers the mapped area
   const span = Math.max(land.xmax - land.xmin, land.zmax - land.zmin) / 2;
   const cx = (land.xmin + land.xmax) / 2, cz = (land.zmin + land.zmax) / 2;
   sun.target.position.set(cx, 0, cz);
   Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 10, far: 30000 });
   sun.shadow.camera.updateProjectionMatrix();
+  initSpots();
+  const sa = spotByName('Saunton'), cr = spotByName('Croyde');
+  const xs = shorelineX(sa.z, 0);
+  ocean = new THREE.Mesh(makeOceanGeometry(isSmall ? 352 : 704, xs - 1200, (sa.z + cr.z) / 2, 3600, 42000), oceanMat);
+  ocean.frustumCulled = false;
+  ocean.renderOrder = 2;
+  scene.add(ocean);
   progress('Refracting the swell');
   await nextFrame();
-  if (!ocean) {
-    const xs = (() => { for (let x = land.xmin; x < land.xmax; x += 5) if (sampleGrid(land, land.bed, x, 0) > state.tide) return x; return 0; })();
-    ocean = new THREE.Mesh(makeOceanGeometry(isSmall ? 320 : 640, xs - 900, 0, 2600, 42000), oceanMat);
-    ocean.frustumCulled = false;
-    ocean.renderOrder = 2;
-    scene.add(ocean);
-  }
   rebuildWaves();
 }
 
@@ -1465,15 +1684,7 @@ function bindRange(id, key, onChange) {
   el.addEventListener('input', () => { state[key] = parseFloat(el.value); updateReadouts(); onChange(); });
 }
 
-async function loadModel() {
-  const land = await buildModelLand(isSmall ? 640 : 1024, progress);
-  const cv = await paintModel(land, isSmall ? 1536 : 2048, progress);
-  await installLand(land, cv);
-  document.getElementById('srcLabel').textContent = 'Modelled terrain';
-  setAttribution('Terrain: approximate hand-built model of Saunton, not survey data. Add a map key for real imagery.');
-}
-
-async function loadSatellite() {
+async function loadSat() {
   const provider = document.getElementById('provider').value;
   const key = document.getElementById('apiKey').value.trim();
   const status = document.getElementById('satStatus');
@@ -1487,35 +1698,43 @@ async function loadSatellite() {
   } catch { /* storage unavailable */ }
   btn.disabled = true;
   status.dataset.tone = '';
-  loadingEl.dataset.done = 'false';
   try {
-    const land = await loadTileLand(provider, key, renderer.capabilities.maxTextureSize, (t) => { progress(t); status.textContent = t; });
-    await installLand(land, land.satCanvas);
-    document.getElementById('srcLabel').textContent = `Satellite · ${PROVIDERS[provider].name}`;
-    setAttribution(land.attrib + ' · Seabed below low water is modelled, not surveyed.');
+    const { canvas, attrib } = await loadSharperImagery(provider, key, state.land, renderer.capabilities.maxTextureSize, (t) => { status.textContent = t; });
+    setColorSource(canvas);
+    document.getElementById('srcLabel').textContent = `Survey terrain · ${PROVIDERS[provider].name} imagery`;
+    document.getElementById('credits').dataset.extra = attrib;
     status.dataset.tone = 'ok';
-    status.textContent = 'Satellite terrain loaded.';
-    setView(state.view, true);
+    status.textContent = `${PROVIDERS[provider].name} imagery loaded. ${attrib}`;
   } catch (e) {
     status.dataset.tone = 'error';
     if (e.kind === 'http' && (e.status === 401 || e.status === 403)) status.textContent = `${PROVIDERS[provider].name} refused the key (HTTP ${e.status}). Check the key and any URL restrictions on it.`;
-    else if (e.kind === 'http') status.textContent = `The tile server answered HTTP ${e.status}. Try again in a moment.`;
-    else status.textContent = 'Could not reach the map server. Pages hosted on claude.ai block map servers, so open this page from GitHub Pages or a local web server.';
+    else if (e.kind === 'http') status.textContent = `The imagery server answered HTTP ${e.status}. Try again in a moment.`;
+    else status.textContent = 'Could not reach the imagery server. claude.ai previews block map servers, so open this page from GitHub Pages or a local web server.';
     console.error(e);
   } finally {
     btn.disabled = false;
-    loadingEl.dataset.done = 'true';
   }
 }
 
-async function boot() {
-  // Start at the real current time in Saunton when the sun is up, otherwise late afternoon
-  const off = londonOffsetHours(today);
-  const nowLocal = today.getUTCHours() + off + today.getUTCMinutes() / 60;
-  const { el } = sunPosition(today, LAT0, LON0);
-  state.tod = el > 0.1 ? Math.round(nowLocal * 12) / 12 : 16;
+let playTimer = 0;
+function setPlaying(on) {
+  const b = document.getElementById('play');
+  b.setAttribute('aria-pressed', String(on));
+  b.textContent = on ? '❚❚' : '▶';
+  b.setAttribute('aria-label', on ? 'Pause' : 'Play through the day');
+  clearInterval(playTimer);
+  if (on) playTimer = setInterval(() => {
+    const fc = state.forecast;
+    if (!fc) return setPlaying(false);
+    const next = state.hourIndex + 1;
+    if (next >= fc.length || fc[next].day !== state.day) return setPlaying(false);
+    selectHour(next);
+  }, 1400);
+}
 
-  bindRange('swellH', 'H0', applySeaUniforms);
+async function boot() {
+  state.day = londonDayISO(new Date());
+  bindRange('swellH', 'H0', () => { applySeaUniforms(); updateSpots(); });
   bindRange('swellT', 'T', () => { applySeaUniforms(); scheduleWaves(); });
   bindRange('swellDir', 'dir', scheduleWaves);
   bindRange('tide', 'tide', () => { applySeaUniforms(); scheduleWaves(); });
@@ -1531,15 +1750,20 @@ async function boot() {
     const collapsed = panel.dataset.collapsed !== 'true';
     panel.dataset.collapsed = String(collapsed);
     toggle.setAttribute('aria-expanded', String(!collapsed));
+    if (!collapsed) requestAnimationFrame(drawTide);
   });
   if (isSmall && innerWidth < 700) { panel.dataset.collapsed = 'true'; toggle.setAttribute('aria-expanded', 'false'); }
-  document.getElementById('loadSat').addEventListener('click', loadSatellite);
-  document.getElementById('useModel').addEventListener('click', async () => {
-    loadingEl.dataset.done = 'false';
-    await loadModel();
-    setView(state.view, true);
-    loadingEl.dataset.done = 'true';
-    const s = document.getElementById('satStatus'); s.dataset.tone = ''; s.textContent = 'Showing the modelled terrain.';
+  document.getElementById('hour').addEventListener('input', (e) => {
+    if (!state.forecast) return;
+    const idx = state.forecast.findIndex(h => h.day === state.day && h.hour === parseInt(e.target.value, 10));
+    if (idx >= 0) selectHour(idx);
+  });
+  document.getElementById('play').addEventListener('click', () => setPlaying(document.getElementById('play').getAttribute('aria-pressed') !== 'true'));
+  document.getElementById('loadSat').addEventListener('click', loadSat);
+  document.getElementById('useBuiltIn').addEventListener('click', () => {
+    setColorSource(state.land.imagery);
+    document.getElementById('srcLabel').textContent = 'Survey terrain · Sentinel-2';
+    const s = document.getElementById('satStatus'); s.dataset.tone = ''; s.textContent = 'Showing the built-in Sentinel-2 imagery.';
   });
   try {
     const p = localStorage.getItem('saunton.provider');
@@ -1551,10 +1775,13 @@ async function boot() {
     try { document.getElementById('apiKey').value = localStorage.getItem('saunton.key.' + e.target.value) || ''; } catch { /* storage unavailable */ }
   });
 
-  await loadModel();
-  setView('overview', true);
+  const land = await loadBaked(progress);
+  await installLand(land);
+  updateSun();
+  setView('area', true);
   loadingEl.dataset.done = 'true';
   window.__ready = true;
+  loadForecast();
 }
 
 let lastT = performance.now();
@@ -1567,13 +1794,12 @@ function frame() {
   oceanUniforms.uPhaseT.value = (oceanUniforms.uPhaseT.value + omega * dt) % (Math.PI * 2);
   oceanUniforms.uGroupPhase.value = (oceanUniforms.uGroupPhase.value + omega * 0.6 * dt / 8) % (Math.PI * 2);
   skyUniforms.uCloudTime.value = t;
-  const now = performance.now();
-  if (tweens.length && tweens[0](now)) tweens.length = 0;
+  if (tweens.length && tweens[0](nowT)) tweens.length = 0;
   controls.update();
-  // keep the camera above sand and water
   if (state.land) {
     const minY = Math.max(groundAt(camera.position.x, camera.position.z), state.tide) + 1.0;
     if (camera.position.y < minY) camera.position.y = minY;
+    updateLabels();
   }
   sky.position.copy(camera.position);
   renderer.render(scene, camera);
@@ -1584,11 +1810,12 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  drawTide();
 });
 
 boot().catch((e) => {
   console.error(e);
-  loadingText.textContent = 'Something went wrong while building the scene. Reload to try again.';
+  loadingText.textContent = "The survey data didn't load. Check that the data folder sits next to this page, then reload.";
 });
 requestAnimationFrame(frame);
 </script>
