@@ -1,0 +1,1596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Saunton Sands 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed WebGL scene; a glass conditions panel docks right on desktop and becomes a bottom sheet on phones. */
+:root {
+  --ground: #0b1820;
+  --glass: rgba(9, 22, 30, 0.74);
+  --glass-strong: rgba(9, 22, 30, 0.9);
+  --ink: #eaf2f1;
+  --muted: #9cb4b6;
+  --line: rgba(234, 242, 241, 0.14);
+  --accent: #f0c27b;
+  --focus: #7fd3d0;
+  --danger: #ff9b85;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 15px/1.45 var(--font-body);
+  overflow: hidden;
+}
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+.brand {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: 16px;
+  pointer-events: none;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
+  max-width: calc(100% - 32px);
+}
+.brand h1 {
+  margin: 0;
+  font: 700 clamp(1.7rem, 4vw, 2.6rem)/0.95 var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.brand p { margin: 6px 0 0; font: 500 0.82rem/1.3 var(--font-data); color: var(--ink); opacity: 0.85; }
+.brand .src { color: var(--accent); white-space: nowrap; }
+
+.panel {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  right: 16px;
+  width: 300px;
+  max-height: calc(100% - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.panel-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 600 0.95rem/1 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.panel-toggle .chev { transition: transform 0.2s ease; font-family: var(--font-data); }
+.panel[data-collapsed="true"] .panel-toggle .chev { transform: rotate(180deg); }
+.panel[data-collapsed="true"] .panel-body { display: none; }
+.panel-body { overflow-y: auto; padding: 14px 16px 16px; display: grid; gap: 16px; }
+
+.readout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.readout div { display: grid; gap: 2px; min-width: 0; }
+.readout .k { font: 600 0.7rem/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.readout .v { font: 500 0.95rem/1.2 var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.controls { display: grid; gap: 12px; }
+.ctl { display: grid; gap: 4px; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; font-size: 0.86rem; color: var(--muted); }
+.ctl output { font: 500 0.82rem/1.2 var(--font-data); font-variant-numeric: tabular-nums; color: var(--ink); }
+input[type="range"] { width: 100%; margin: 0; accent-color: var(--accent); height: 22px; }
+
+.group-label { margin: 0 0 8px; font: 600 0.72rem/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.btn {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(234, 242, 241, 0.06);
+  color: var(--ink);
+  font: 500 0.86rem/1.2 var(--font-body);
+  cursor: pointer;
+  text-align: center;
+}
+.btn:hover { background: rgba(234, 242, 241, 0.12); }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #1a1408; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn:disabled { opacity: 0.5; cursor: progress; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+details.sat { border-top: 1px solid var(--line); padding-top: 12px; }
+details.sat summary { cursor: pointer; font: 600 0.8rem/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); }
+details.sat .sat-body { display: grid; gap: 8px; margin-top: 10px; }
+details.sat p { margin: 0; font-size: 0.84rem; color: var(--muted); }
+details.sat select, details.sat input[type="password"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--ink);
+  font: 0.86rem var(--font-data);
+}
+.check { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; }
+.row .btn { flex: 1 1 120px; }
+#satStatus { min-height: 1.2em; }
+#satStatus[data-tone="error"] { color: var(--danger); }
+#satStatus[data-tone="ok"] { color: var(--focus); }
+
+.foot {
+  position: fixed;
+  left: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  max-width: min(520px, calc(100% - 352px));
+  display: grid;
+  gap: 4px;
+  pointer-events: none;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.hint { margin: 0; font-size: 0.8rem; color: var(--ink); opacity: 0.75; }
+.attrib { margin: 0; font: 0.72rem/1.3 var(--font-data); color: var(--ink); opacity: 0.75; }
+
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  background: var(--ground);
+  transition: opacity 0.5s ease;
+  z-index: 5;
+}
+.loading[data-done="true"] { opacity: 0; pointer-events: none; }
+.loading p { margin: 0; font: 600 1rem/1 var(--font-display); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.swell-bar { width: 140px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.swell-bar span { display: block; width: 40%; height: 100%; background: var(--accent); animation: sweep 1.4s ease-in-out infinite; }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+.error-box { max-width: 420px; padding: 0 16px; text-align: center; color: var(--ink); }
+
+@media (max-width: 700px) {
+  .panel {
+    top: auto;
+    left: 16px;
+    right: 16px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    width: auto;
+    max-height: 58%;
+  }
+  .foot { display: none; }
+  .panel .attrib-inline { display: block; }
+}
+.attrib-inline { display: none; margin: 0; font: 0.7rem/1.3 var(--font-data); color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .swell-bar span { animation: none; width: 100%; }
+  .loading, .panel-toggle .chev { transition: none; }
+}
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="3D view of Saunton Sands with animated surf"></canvas>
+
+<header class="brand">
+  <h1>Saunton Sands</h1>
+  <p>North Devon · 51.10°N 4.23°W · <span class="src" id="srcLabel">Modelled terrain</span></p>
+</header>
+
+<aside class="panel" id="panel" data-collapsed="false">
+  <button class="panel-toggle" id="panelToggle" aria-expanded="true" aria-controls="panelBody">
+    <span>Conditions</span><span class="chev" aria-hidden="true">▾</span>
+  </button>
+  <div class="panel-body" id="panelBody">
+    <section class="readout" aria-label="Current settings">
+      <div><span class="k">Swell</span><span class="v" id="roSwell">–</span></div>
+      <div><span class="k">From</span><span class="v" id="roDir">–</span></div>
+      <div><span class="k">Tide</span><span class="v" id="roTide">–</span></div>
+      <div><span class="k">Sun</span><span class="v" id="roSun">–</span></div>
+    </section>
+
+    <section class="controls" aria-label="Sea and light">
+      <div class="ctl">
+        <label for="swellH">Swell height <output id="oSwellH" for="swellH"></output></label>
+        <input type="range" id="swellH" min="0.3" max="4" step="0.1" value="1.6">
+      </div>
+      <div class="ctl">
+        <label for="swellT">Swell period <output id="oSwellT" for="swellT"></output></label>
+        <input type="range" id="swellT" min="6" max="18" step="0.5" value="11">
+      </div>
+      <div class="ctl">
+        <label for="swellDir">Swell direction <output id="oSwellDir" for="swellDir"></output></label>
+        <input type="range" id="swellDir" min="235" max="330" step="1" value="285">
+      </div>
+      <div class="ctl">
+        <label for="tide">Tide height <output id="oTide" for="tide"></output></label>
+        <input type="range" id="tide" min="-3.8" max="3.8" step="0.1" value="0.6">
+      </div>
+      <div class="ctl">
+        <label for="chop">Wind chop <output id="oChop" for="chop"></output></label>
+        <input type="range" id="chop" min="0" max="1" step="0.05" value="0.35">
+      </div>
+      <div class="ctl">
+        <label for="tod">Time of day <output id="oTod" for="tod"></output></label>
+        <input type="range" id="tod" min="4" max="22" step="0.0833" value="16">
+      </div>
+    </section>
+
+    <section aria-labelledby="viewsLabel">
+      <p class="group-label" id="viewsLabel">Views</p>
+      <div class="views" role="group" aria-labelledby="viewsLabel">
+        <button class="btn" data-view="overview" aria-pressed="true">Overview</button>
+        <button class="btn" data-view="beach" aria-pressed="false">On the beach</button>
+        <button class="btn" data-view="lineup" aria-pressed="false">In the line-up</button>
+        <button class="btn" data-view="headland" aria-pressed="false">Saunton Down</button>
+      </div>
+    </section>
+
+    <details class="sat" id="satDetails">
+      <summary>Satellite terrain</summary>
+      <div class="sat-body">
+        <p>Load real aerial imagery and elevation with your own map key. The key stays in this browser and is sent only to the provider you pick.</p>
+        <label class="check" for="provider">Provider</label>
+        <select id="provider">
+          <option value="mapbox">Mapbox (public token, pk.…)</option>
+          <option value="maptiler">MapTiler (API key)</option>
+        </select>
+        <input id="apiKey" type="password" placeholder="Paste token or key" autocomplete="off" spellcheck="false" aria-label="Map provider token or key">
+        <label class="check"><input type="checkbox" id="rememberKey" checked> Remember on this device</label>
+        <div class="row">
+          <button class="btn primary" id="loadSat">Load satellite</button>
+          <button class="btn" id="useModel">Use model</button>
+        </div>
+        <p id="satStatus" role="status"></p>
+      </div>
+    </details>
+    <p class="attrib-inline" id="attribInline"></p>
+  </div>
+</aside>
+
+<footer class="foot">
+  <p class="hint">Drag to orbit · scroll or pinch to zoom · right-drag or two fingers to pan</p>
+  <p class="attrib" id="attrib"></p>
+</footer>
+
+<div class="loading" id="loading">
+  <div class="swell-bar" aria-hidden="true"><span></span></div>
+  <p id="loadingText">Shaping the coastline</p>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------------------------------------------------------------------------
+// Geography. Local frame: metres, x = east, z = south, y = up, origin below.
+// ---------------------------------------------------------------------------
+const LAT0 = 51.100, LON0 = -4.235;
+const M_LAT = 111250;                                   // metres per degree of latitude near 51°N
+const M_LON = 111320 * Math.cos(LAT0 * Math.PI / 180);  // metres per degree of longitude
+const toLocal = (lat, lon) => ({ x: (lon - LON0) * M_LON, z: -(lat - LAT0) * M_LAT });
+const BOUNDS = { latS: 51.065, latN: 51.135, lonW: -4.290, lonE: -4.180 };
+const G = 9.81;
+
+const isSmall = Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer: coarse)').matches;
+
+// ---------------------------------------------------------------------------
+// Small numeric helpers
+// ---------------------------------------------------------------------------
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+function hash2(ix, iz) {
+  let h = (Math.imul(ix, 374761393) + Math.imul(iz, 668265263)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967295;
+}
+function vnoise(x, z) {
+  const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx), uz = fz * fz * (3 - 2 * fz);
+  const a = hash2(ix, iz), b = hash2(ix + 1, iz), c = hash2(ix, iz + 1), d = hash2(ix + 1, iz + 1);
+  return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
+}
+function fbm(x, z, oct = 4) {
+  let s = 0, a = 0.5, f = 1, n = 0;
+  for (let i = 0; i < oct; i++) { s += a * vnoise(x * f + i * 17.3, z * f - i * 9.1); n += a; f *= 2.03; a *= 0.5; }
+  return s / n;
+}
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+// Exact 2D Euclidean distance transform (Felzenszwalb & Huttenlocher). In: 0 at features, BIG elsewhere.
+const BIG = 1e20;
+function edt(grid, W, H) {
+  const n = Math.max(W, H);
+  const f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+  const dt1 = (len) => {
+    let k = 0; v[0] = 0; z[0] = -Infinity; z[1] = Infinity;
+    for (let q = 1; q < len; q++) {
+      let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
+      k++; v[k] = q; z[k] = s; z[k + 1] = Infinity;
+    }
+    k = 0;
+    for (let q = 0; q < len; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
+  };
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) f[y] = grid[y * W + x];
+    dt1(H);
+    for (let y = 0; y < H; y++) grid[y * W + x] = d[y];
+  }
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) f[x] = grid[y * W + x];
+    dt1(W);
+    for (let x = 0; x < W; x++) grid[y * W + x] = d[x];
+  }
+  return grid;
+}
+// Signed distance in metres: positive on land, negative at sea.
+function signedDistance(isLand, W, H, cell) {
+  const a = new Float64Array(W * H), b = new Float64Array(W * H);
+  for (let i = 0; i < W * H; i++) { a[i] = isLand[i] ? 0 : BIG; b[i] = isLand[i] ? BIG : 0; }
+  edt(a, W, H); edt(b, W, H);
+  const sd = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) sd[i] = isLand[i] ? Math.sqrt(b[i]) * cell : -Math.sqrt(a[i]) * cell;
+  return sd;
+}
+
+// Offshore depth profile (m, positive down) for distance d (m) from the low-water shoreline.
+// Gentle ~1:80 intertidal slope, flattening offshore, with two shore-parallel sandbars on sandy coast.
+function seaDepth(d, sandy, n) {
+  let depth = 6 * (1 - Math.exp(-d / 650)) + 0.0035 * d;
+  const bars = 0.75 * Math.exp(-(((d - 190) / 70) ** 2)) + 0.55 * Math.exp(-(((d - 430) / 110) ** 2));
+  depth -= bars * sandy * (0.7 + 0.6 * n);
+  return depth;
+}
+
+// ---------------------------------------------------------------------------
+// Procedural model of the Saunton coast (approximate, hand-drawn from memory of the map)
+// ---------------------------------------------------------------------------
+const EXT = 3900;
+const COAST = [ // land polygon, local metres (x east, z south); north block
+  [EXT, -EXT], [-2500, -EXT], [-2750, -3560], [-2350, -3420], [-1700, -3330], [-1050, -3200], [-720, -3010],
+  [-880, -2760], [-1480, -2520], [-1150, -2330], [-420, -2170], [180, -2030], [560, -1880],
+  [640, -1450], [670, -600], [690, 400], [705, 1400], [725, 2250], [860, 2720], [1500, 2860],
+  [2600, 2880], [EXT, 2830],
+];
+const COAST_S = [[EXT, 3470], [2300, 3460], [1500, 3560], [1150, EXT], [EXT, EXT]];
+
+function chaikin(pts, iters, closed = true) {
+  let p = pts;
+  for (let it = 0; it < iters; it++) {
+    const out = [];
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length];
+      if (!closed && i === p.length - 1) { out.push(a); break; }
+      out.push([0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]], [0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]]);
+    }
+    p = out;
+  }
+  return p;
+}
+
+async function buildModelLand(N, progress) {
+  progress('Shaping the coastline');
+  await nextFrame();
+  const xmin = -EXT, zmin = -EXT, cell = (2 * EXT) / (N - 1);
+  // Rasterise the coastline polygons
+  const cv = document.createElement('canvas'); cv.width = N; cv.height = N;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.fillStyle = '#000'; cx.fillRect(0, 0, N, N);
+  cx.fillStyle = '#fff';
+  for (const poly of [COAST, COAST_S]) {
+    const sm = chaikin(poly, 4);
+    cx.beginPath();
+    sm.forEach(([x, z], i) => {
+      // wobble the coastline a little so it does not look drawn with a ruler
+      const w = (fbm(x / 260, z / 260, 3) - 0.5) * 60;
+      const px = (x + w - xmin) / cell + 0.5, pz = (z + w * 0.6 - zmin) / cell + 0.5;
+      i ? cx.lineTo(px, pz) : cx.moveTo(px, pz);
+    });
+    cx.closePath(); cx.fill();
+  }
+  const img = cx.getImageData(0, 0, N, N).data;
+  const isLand = new Uint8Array(N * N);
+  for (let i = 0; i < N * N; i++) isLand[i] = img[i * 4] > 127 ? 1 : 0;
+  const sd = signedDistance(isLand, N, N, cell);
+
+  progress('Raising dunes and headland');
+  await nextFrame();
+  const bed = new Float32Array(N * N);
+  for (let j = 0; j < N; j++) {
+    const z = zmin + j * cell;
+    for (let i = 0; i < N; i++) {
+      const x = xmin + i * cell, s = sd[j * N + i];
+      bed[j * N + i] = modelElevation(x, z, s);
+    }
+  }
+  return { kind: 'model', W: N, H: N, xmin, zmin, xmax: xmin + cell * (N - 1), zmax: zmin + cell * (N - 1), cell, bed, sd };
+}
+
+function regionWeights(x, z) {
+  const croyde = Math.exp(-(((x + 800) / 420) ** 2) - (((z + 3020) / 330) ** 2));
+  const rock = smooth(-1600, -1950, z) * (1 - smooth(0.25, 0.7, croyde));
+  const dunesAlong = smooth(-1750, -1250, z) * (1 - smooth(2350, 2800, z));
+  return { rock, dunesAlong, croyde };
+}
+
+function modelElevation(x, z, s) {
+  const { rock, dunesAlong } = regionWeights(x, z);
+  const n1 = fbm(x / 140, z / 140, 4);
+  if (s <= 0) {
+    const d = -s;
+    let depth = seaDepth(d, 1 - rock, fbm(x / 600, z / 900, 2));
+    // reefs and rock platforms off the headland
+    depth -= rock * (fbm(x / 120, z / 120, 4) - 0.35) * 2.5 * Math.exp(-d / 500);
+    // sand ripples on the bed
+    depth += 0.15 * Math.sin(x / 9 + n1 * 6) * (1 - rock);
+    return -Math.max(depth, -0.6);
+  }
+  // Beach face: same gentle gradient carried up the intertidal zone to the dry upper beach
+  const beach = Math.min(s * 0.0125, 4.6) + Math.max(0, s - 368) * 0.004;
+  // Braunton Burrows: hummocky dune field behind the beach
+  const duneEnv = smooth(260, 520, s) * (1 - smooth(1500, 2300, s)) * dunesAlong;
+  const ridges = 1 - Math.abs(2 * fbm(x / 190, z / 120, 4) - 1);
+  const dunes = 5 + 24 * Math.pow(ridges, 1.6) * (0.55 + 0.45 * fbm(x / 800, z / 800, 2));
+  let e = Math.max(beach, lerp(beach, dunes, duneEnv));
+  // Farmland and marsh inland
+  const farm = 4 + 22 * fbm(x / 1600, z / 1600, 3) + Math.max(0, x - 2300) * 0.012 + Math.max(0, -z - 800) * 0.02;
+  e = lerp(e, Math.max(e, farm), smooth(1300, 2400, s) * (1 - rock));
+  // Saunton Down and Baggy Point: steep, grassy headlands ending in low cliffs
+  const down = 145 * Math.exp(-(((x + 150) / 1350) ** 2) - (((z + 2700) / 720) ** 2))
+             + 105 * Math.exp(-(((x + 2000) / 1000) ** 2) - (((z + 3650) / 420) ** 2))
+             + 60 * Math.exp(-(((x - 1600) / 1500) ** 2) - (((z + 2600) / 900) ** 2));
+  const hill = (down + 12 * n1) * smooth(0, 220, s) + Math.min(s * 0.05, 6);
+  e = lerp(e, Math.max(e * 0.4, hill), rock);
+  // hills step down gently behind the beach's north end too
+  e = Math.max(e, down * smooth(1200, 2600, s + Math.max(0, -z - 1500)) * 0.85);
+  return e + (n1 - 0.5) * 1.2 * smooth(0, 40, s);
+}
+
+// Colour texture for the procedural model: sand, wet sand, marram dunes, heath, hedged fields.
+async function paintModel(land, size, progress) {
+  progress('Painting sand and fields');
+  await nextFrame();
+  const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  const px = img.data;
+  const { W, cell, bed, sd } = land;
+  const sample = (arr, gx, gz) => {
+    const i = Math.min(W - 2, Math.max(0, Math.floor(gx))), j = Math.min(W - 2, Math.max(0, Math.floor(gz)));
+    const fx = gx - i, fz = gz - j, o = j * W + i;
+    return lerp(lerp(arr[o], arr[o + 1], fx), lerp(arr[o + W], arr[o + W + 1], fx), fz);
+  };
+  const mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  const C = {
+    deep: [62, 74, 66], seabed: [128, 116, 90], wet: [176, 158, 124], dry: [224, 208, 174], strand: [112, 98, 78],
+    marram: [150, 150, 104], slack: [84, 106, 62], scrub: [58, 76, 44], grass: [92, 122, 62], heath: [104, 96, 58],
+    gorse: [56, 72, 40], rock: [138, 130, 116], darkRock: [98, 92, 82], hedge: [40, 58, 32],
+  };
+  const fields = [[96, 128, 66], [118, 140, 72], [140, 132, 86], [84, 112, 58], [156, 146, 98], [108, 124, 70], [126, 112, 80]];
+  const scale = (W - 1) / (size - 1);
+  for (let y = 0; y < size; y++) {
+    if (y % 128 === 0) await nextFrame();
+    for (let x = 0; x < size; x++) {
+      const gx = x * scale, gz = y * scale;
+      const wx = land.xmin + gx * cell, wz = land.zmin + gz * cell;
+      const e = sample(bed, gx, gz), s = sample(sd, gx, gz);
+      const ex = sample(bed, gx + 1, gz) - sample(bed, gx - 1, gz), ez = sample(bed, gx, gz + 1) - sample(bed, gx, gz - 1);
+      const slope = Math.hypot(ex, ez) / (2 * cell);
+      const { rock, dunesAlong } = regionWeights(wx, wz);
+      const n = fbm(wx / 30, wz / 30, 3), n2 = fbm(wx / 160, wz / 160, 3), fine = hash2(x, y) - 0.5;
+      let c;
+      if (s <= 0) {
+        c = mix3(C.seabed, C.deep, smooth(2, 14, -e));
+        c = mix3(c, C.darkRock, rock * smooth(0.45, 0.7, fbm(wx / 60, wz / 60, 3)));
+      } else if (e < 4.4 && rock < 0.5) {
+        c = mix3(C.wet, C.dry, smooth(3.2, 4.3, e));
+        c = mix3(c, C.strand, Math.exp(-(((e - 3.9) / 0.12) ** 2)) * 0.7 * n);
+        c = mix3(c, mix3(c, [96, 86, 66], 0.5), 0.25 * Math.sin(wx / 7 + n * 8) ** 8);
+      } else {
+        const veg = smooth(0.2, 0.75, n2 + (s - 450) / 900);
+        const dune = mix3(mix3(C.dry, C.marram, veg), C.slack, smooth(9, 5, e) * veg * 0.8);
+        const dScrub = mix3(dune, C.scrub, smooth(0.62, 0.8, fbm(wx / 90, wz / 90, 3)) * veg);
+        // Field patchwork with hedgerows (Voronoi on a jittered grid)
+        const fx = wx / 190, fz = wz / 150;
+        const ix = Math.floor(fx), iz = Math.floor(fz);
+        let d1 = 1e9, d2 = 1e9, id = 0;
+        for (let oz = -1; oz <= 1; oz++) for (let ox = -1; ox <= 1; ox++) {
+          const cxp = ix + ox + 0.15 + 0.7 * hash2(ix + ox, iz + oz), czp = iz + oz + 0.15 + 0.7 * hash2(iz + oz + 77, ix + ox - 31);
+          const dd = Math.hypot((fx - cxp) * 190, (fz - czp) * 150);
+          if (dd < d1) { d2 = d1; d1 = dd; id = hash2(ix + ox + 5, iz + oz + 9); } else if (dd < d2) d2 = dd;
+        }
+        let farm = fields[Math.floor(id * fields.length)].slice();
+        farm = mix3(farm, [farm[0] * 0.85, farm[1] * 0.9, farm[2] * 0.85], n);
+        farm = mix3(farm, C.hedge, smooth(7, 2, d2 - d1));
+        const farmW = smooth(1300, 2400, s) * (1 - rock);
+        let land = mix3(dScrub, farm, dunesAlong > 0.5 ? farmW : Math.max(farmW, 0.5));
+        // headland heath, gorse and cliffs
+        let head = mix3(C.grass, C.heath, smooth(0.4, 0.7, n2));
+        head = mix3(head, C.gorse, smooth(0.6, 0.78, fbm(wx / 45, wz / 45, 3)));
+        head = mix3(head, C.rock, smooth(0.8, 1.3, slope));
+        head = mix3(head, C.darkRock, smooth(40, 5, s) * 0.8);
+        c = mix3(land, head, rock);
+      }
+      const k = 1 + fine * 0.08;
+      const o = (y * size + x) * 4;
+      px[o] = clamp(c[0] * k, 0, 255); px[o + 1] = clamp(c[1] * k, 0, 255); px[o + 2] = clamp(c[2] * k, 0, 255); px[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv;
+}
+
+// ---------------------------------------------------------------------------
+// Satellite imagery + elevation from a tile provider (needs the viewer's key)
+// ---------------------------------------------------------------------------
+const lon2tile = (lon, z) => Math.floor((lon + 180) / 360 * 2 ** z);
+const lat2tile = (lat, z) => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * 2 ** z); };
+const tile2lon = (x, z) => x / 2 ** z * 360 - 180;
+const tile2lat = (y, z) => { const n = Math.PI - 2 * Math.PI * y / 2 ** z; return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); };
+
+const PROVIDERS = {
+  mapbox: {
+    name: 'Mapbox',
+    sat: (z, x, y, k) => `https://api.mapbox.com/v4/mapbox.satellite/${z}/${x}/${y}@2x.jpg90?access_token=${encodeURIComponent(k)}`,
+    satPx: 512,
+    dem: (z, x, y, k) => `https://api.mapbox.com/v4/mapbox.terrain-rgb/${z}/${x}/${y}.pngraw?access_token=${encodeURIComponent(k)}`,
+    attrib: 'Imagery and elevation © Mapbox © OpenStreetMap contributors © Maxar',
+  },
+  maptiler: {
+    name: 'MapTiler',
+    sat: (z, x, y, k) => `https://api.maptiler.com/tiles/satellite-v2/${z}/${x}/${y}.jpg?key=${encodeURIComponent(k)}`,
+    satPx: 512,
+    dem: (z, x, y, k) => `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.webp?key=${encodeURIComponent(k)}`,
+    attrib: 'Imagery and elevation © MapTiler © OpenStreetMap contributors',
+  },
+};
+
+async function fetchBitmap(url) {
+  let res;
+  try { res = await fetch(url, { mode: 'cors' }); }
+  catch (e) { const err = new Error('network'); err.kind = 'network'; throw err; }
+  if (!res.ok) { const err = new Error('http ' + res.status); err.kind = 'http'; err.status = res.status; throw err; }
+  const blob = await res.blob();
+  return createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+}
+
+async function loadTileLand(providerId, key, maxTex, progress) {
+  const P = PROVIDERS[providerId];
+  const zd = 14;
+  const tx0 = lon2tile(BOUNDS.lonW, zd), tx1 = lon2tile(BOUNDS.lonE, zd);
+  const ty0 = lat2tile(BOUNDS.latN, zd), ty1 = lat2tile(BOUNDS.latS, zd);
+  const nx = tx1 - tx0 + 1, ny = ty1 - ty0 + 1;
+  // Imagery one zoom deeper when the GPU can hold the bigger texture (≈1.5 m per pixel instead of ≈3 m)
+  const deeper = maxTex >= 8192 && !isSmall;
+  const zs = deeper ? zd + 1 : zd, f = deeper ? 2 : 1;
+  const tilePx = P.satPx;
+  const satCv = document.createElement('canvas');
+  satCv.width = nx * f * tilePx; satCv.height = ny * f * tilePx;
+  const sctx = satCv.getContext('2d');
+  const demPx = 256;
+  const demCv = document.createElement('canvas');
+  demCv.width = nx * demPx; demCv.height = ny * demPx;
+  const dctx = demCv.getContext('2d', { willReadFrequently: true });
+
+  const jobs = [];
+  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) jobs.push({ kind: 'dem', x, y });
+  for (let y = 0; y < ny * f; y++) for (let x = 0; x < nx * f; x++) jobs.push({ kind: 'sat', x, y });
+  let done = 0;
+  const run = async (job) => {
+    if (job.kind === 'dem') {
+      const bm = await fetchBitmap(P.dem(zd, tx0 + job.x, ty0 + job.y, key));
+      dctx.drawImage(bm, job.x * demPx, job.y * demPx, demPx, demPx);
+    } else {
+      const bm = await fetchBitmap(P.sat(zs, tx0 * f + job.x, ty0 * f + job.y, key));
+      sctx.drawImage(bm, job.x * tilePx, job.y * tilePx, tilePx, tilePx);
+    }
+    done++;
+    progress(`Downloading tiles ${done}/${jobs.length}`);
+  };
+  // first tile alone, so a bad key fails fast with one request
+  await run(jobs[0]);
+  let next = 1;
+  const workers = Array.from({ length: 6 }, async () => { while (next < jobs.length) await run(jobs[next++]); });
+  await Promise.all(workers);
+
+  progress('Decoding elevation');
+  await nextFrame();
+  const W = demCv.width, H = demCv.height;
+  const rgb = dctx.getImageData(0, 0, W, H).data;
+  const dem = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) dem[i] = -10000 + (rgb[i * 4] * 65536 + rgb[i * 4 + 1] * 256 + rgb[i * 4 + 2]) * 0.1;
+
+  const nw = toLocal(tile2lat(ty0, zd), tile2lon(tx0, zd));
+  const se = toLocal(tile2lat(ty1 + 1, zd), tile2lon(tx1 + 1, zd));
+  const cellX = (se.x - nw.x) / W, cellZ = (se.z - nw.z) / H;
+  const cell = (cellX + cellZ) / 2;
+
+  // Sea = low cells connected to the open (west) edge. Inland marsh stays land.
+  progress('Mapping the shoreline');
+  await nextFrame();
+  const sea = new Uint8Array(W * H);
+  const stack = [];
+  for (let j = 0; j < H; j++) { const i = j * W; if (dem[i] <= 0.3) { sea[i] = 1; stack.push(i); } }
+  while (stack.length) {
+    const i = stack.pop(), x = i % W, y = (i / W) | 0;
+    const nb = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1];
+    for (const k of nb) if (k >= 0 && !sea[k] && dem[k] <= 0.3) { sea[k] = 1; stack.push(k); }
+  }
+  const isLand = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) isLand[i] = sea[i] ? 0 : 1;
+  const sd = signedDistance(isLand, W, H, cell);
+  // Elevation tiles carry little or no seabed detail here, so synthesise a plausible profile offshore
+  // and keep any deeper measured values.
+  const bed = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    if (isLand[i]) { bed[i] = dem[i]; continue; }
+    const x = i % W, y = (i / W) | 0;
+    const n = fbm(x / 60, y / 90, 2);
+    bed[i] = Math.min(-seaDepth(-sd[i], 1, n), dem[i]);
+  }
+  return {
+    kind: providerId, attrib: P.attrib, W, H, cell,
+    xmin: nw.x + cell / 2, zmin: nw.z + cell / 2, xmax: nw.x + cell * (W - 0.5), zmax: nw.z + cell * (H - 0.5),
+    bed, sd, satCanvas: satCv,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Wave field: wave crests refracted over the seabed with an eikonal solver.
+// Phase φ satisfies |∇φ| = k(h), with k from the linear dispersion relation ω² = g k tanh(k h).
+// ---------------------------------------------------------------------------
+function waveNumber(h, omega) {
+  const k0 = omega * omega / G;
+  if (h <= 0) return k0 * 40;
+  let k = k0 / Math.sqrt(Math.tanh(k0 * h));
+  for (let i = 0; i < 3; i++) {
+    const t = Math.tanh(k * h);
+    const fval = G * k * t - omega * omega;
+    const df = G * t + G * k * h * (1 - t * t);
+    k -= fval / df;
+  }
+  return k;
+}
+
+function sampleGrid(land, arr, x, z) {
+  const gx = clamp((x - land.xmin) / land.cell, 0, land.W - 1.001), gz = clamp((z - land.zmin) / land.cell, 0, land.H - 1.001);
+  const i = Math.floor(gx), j = Math.floor(gz), fx = gx - i, fz = gz - j, o = j * land.W + i;
+  return lerp(lerp(arr[o], arr[o + 1], fx), lerp(arr[o + land.W], arr[o + land.W + 1], fx), fz);
+}
+
+function buildWaveField(land, res, sea, T, fromDeg) {
+  const omega = 2 * Math.PI / T;
+  const beta = (fromDeg + 180) * Math.PI / 180;
+  const d0x = Math.sin(beta), d0z = -Math.cos(beta);
+  const spanX = land.xmax - land.xmin, spanZ = land.zmax - land.zmin;
+  const cs = Math.max(spanX, spanZ) / (res - 1);
+  const Gx = Math.round(spanX / cs) + 1, Gz = Math.round(spanZ / cs) + 1;
+  const n = Gx * Gz;
+  const bed = new Float32Array(n), slow = new Float64Array(n), wet = new Uint8Array(n);
+  for (let j = 0; j < Gz; j++) for (let i = 0; i < Gx; i++) {
+    const o = j * Gx + i;
+    bed[o] = sampleGrid(land, land.bed, land.xmin + i * cs, land.zmin + j * cs);
+    const h = sea - bed[o];
+    wet[o] = h > 0.05 ? 1 : 0;
+    slow[o] = wet[o] ? waveNumber(h, omega) : 0;
+  }
+  // Reference wavenumber at the open boundary (median of deep boundary cells)
+  const edgeK = [];
+  const isUpwind = (i, j) => (i === 0 && d0x > 0) || (i === Gx - 1 && d0x < 0) || (j === 0 && d0z > 0) || (j === Gz - 1 && d0z < 0);
+  for (let j = 0; j < Gz; j++) for (let i = 0; i < Gx; i++) if (isUpwind(i, j) && wet[j * Gx + i] && sea - bed[j * Gx + i] > 4) edgeK.push(slow[j * Gx + i]);
+  edgeK.sort((a, b) => a - b);
+  const kRef = edgeK.length ? edgeK[edgeK.length >> 1] : waveNumber(20, omega);
+
+  const phi = new Float64Array(n).fill(BIG);
+  for (let j = 0; j < Gz; j++) for (let i = 0; i < Gx; i++) {
+    const o = j * Gx + i;
+    if (isUpwind(i, j) && wet[o] && sea - bed[o] > 4) phi[o] = kRef * (d0x * (land.xmin + i * cs) + d0z * (land.zmin + j * cs));
+  }
+  // Fast sweeping (Zhao 2005), Godunov upwind update
+  const update = (i, j) => {
+    const o = j * Gx + i;
+    if (!wet[o]) return;
+    const a = Math.min(i > 0 ? phi[o - 1] : BIG, i < Gx - 1 ? phi[o + 1] : BIG);
+    const b = Math.min(j > 0 ? phi[o - Gx] : BIG, j < Gz - 1 ? phi[o + Gx] : BIG);
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    if (lo >= BIG) return;
+    const f = slow[o] * cs;
+    const cand = hi - lo >= f ? lo + f : 0.5 * (lo + hi + Math.sqrt(2 * f * f - (hi - lo) * (hi - lo)));
+    if (cand < phi[o]) phi[o] = cand;
+  };
+  for (let it = 0; it < 2; it++) {
+    for (let j = 0; j < Gz; j++) for (let i = 0; i < Gx; i++) update(i, j);
+    for (let j = 0; j < Gz; j++) for (let i = Gx - 1; i >= 0; i--) update(i, j);
+    for (let j = Gz - 1; j >= 0; j--) for (let i = 0; i < Gx; i++) update(i, j);
+    for (let j = Gz - 1; j >= 0; j--) for (let i = Gx - 1; i >= 0; i--) update(i, j);
+  }
+  // Direction of travel = ∇φ / |∇φ|; sheltering where crests have wrapped far from the offshore direction
+  const ang0 = Math.atan2(d0z, d0x);
+  const ang = new Float32Array(n).fill(ang0), kr = new Float32Array(n);
+  for (let j = 0; j < Gz; j++) for (let i = 0; i < Gx; i++) {
+    const o = j * Gx + i;
+    if (phi[o] >= BIG) continue;
+    const L = i > 0 && phi[o - 1] < BIG ? phi[o - 1] : phi[o], R = i < Gx - 1 && phi[o + 1] < BIG ? phi[o + 1] : phi[o];
+    const U = j > 0 && phi[o - Gx] < BIG ? phi[o - Gx] : phi[o], D = j < Gz - 1 && phi[o + Gx] < BIG ? phi[o + Gx] : phi[o];
+    const gx = R - L, gz = D - U;
+    if (gx * gx + gz * gz > 1e-12) ang[o] = Math.atan2(gz, gx);
+    const c = Math.cos(ang[o] - ang0);
+    kr[o] = clamp(Math.sqrt(Math.max(c, 0.02)), 0.12, 1);
+  }
+  // Carry the phase a little way inland so swash can run up the sand; fill unreached water
+  const kLand = waveNumber(0.4, omega);
+  let frontier = [];
+  for (let o = 0; o < n; o++) if (phi[o] >= BIG) frontier.push(o);
+  for (let pass = 0; pass < 40 && frontier.length; pass++) {
+    const set = [], rest = [];
+    for (const o of frontier) {
+      const i = o % Gx, j = (o / Gx) | 0;
+      let sum = 0, cnt = 0, as = 0, krs = 0;
+      const nb = [[i - 1, j, 1, 0], [i + 1, j, -1, 0], [i, j - 1, 0, 1], [i, j + 1, 0, -1]];
+      for (const [ni, nj, ox, oz] of nb) {
+        if (ni < 0 || nj < 0 || ni >= Gx || nj >= Gz) continue;
+        const q = nj * Gx + ni;
+        if (phi[q] >= BIG) continue;
+        sum += phi[q] + kLand * cs * (Math.cos(ang[q]) * ox + Math.sin(ang[q]) * oz);
+        as += ang[q]; krs += kr[q]; cnt++;
+      }
+      if (cnt) set.push([o, sum / cnt, as / cnt, krs / cnt]); else rest.push(o);
+    }
+    for (const [o, p, a, k] of set) { phi[o] = p; ang[o] = a; kr[o] = k; }
+    frontier = rest;
+  }
+  for (const o of frontier) { phi[o] = 0; kr[o] = 0; }
+  // Soften the shelter factor
+  for (let pass = 0; pass < 3; pass++) {
+    const src = kr.slice();
+    for (let j = 1; j < Gz - 1; j++) for (let i = 1; i < Gx - 1; i++) {
+      const o = j * Gx + i;
+      kr[o] = (src[o] * 4 + src[o - 1] + src[o + 1] + src[o - Gx] + src[o + Gx]) / 8;
+    }
+  }
+  const data = new Float32Array(n * 4);
+  for (let o = 0; o < n; o++) { data[o * 4] = phi[o]; data[o * 4 + 1] = bed[o]; data[o * 4 + 2] = ang[o]; data[o * 4 + 3] = kr[o]; }
+  return { data, Gx, Gz, x0: land.xmin, z0: land.zmin, cs, kRef, d0: new THREE.Vector2(d0x, d0z) };
+}
+
+// ---------------------------------------------------------------------------
+// Shared GLSL
+// ---------------------------------------------------------------------------
+const GLSL_NOISE = /* glsl */`
+float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1, 0)), u.x), mix(hash12(i + vec2(0, 1)), hash12(i + vec2(1, 1)), u.x), u.y);
+}
+float fbm4(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = mat2(1.6, 1.2, -1.2, 1.6) * p + 7.3; a *= 0.5; }
+  return s / 0.9375;
+}`;
+
+const GLSL_SKY = /* glsl */`
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uZenith;
+uniform vec3 uHorizon;
+uniform float uCloudTime;
+uniform float uCloudCover;
+vec3 skyColor(vec3 dir, bool withSun) {
+  float y = dir.y;
+  float t = pow(clamp(y, 0.0, 1.0), 0.42);
+  vec3 col = mix(uHorizon, uZenith, t);
+  float mu = max(dot(dir, uSunDir), 0.0);
+  col += uSunColor * (0.10 * pow(mu, 6.0) + 0.35 * pow(mu, 48.0)) * (1.0 - 0.6 * t);
+  if (y < 0.0) col = mix(col, uHorizon * 0.8, clamp(-y * 8.0, 0.0, 1.0));
+  float cov = 0.0;
+  if (y > 0.0) {
+    vec2 uv = dir.xz / (y + 0.08) * 1.4 + uCloudTime * vec2(0.010, 0.003);
+    float n = fbm4(uv);
+    float n2 = fbm4(uv * 2.7 + 3.1);
+    cov = smoothstep(1.0 - uCloudCover, 1.0 - uCloudCover + 0.32, n * 0.8 + n2 * 0.2) * smoothstep(0.0, 0.12, y);
+    vec3 lit = uSunColor * 0.32 + uHorizon * 0.75;
+    vec3 shade = mix(uHorizon, uZenith, 0.5) * 0.62 + uSunColor * 0.04;
+    vec3 cloud = mix(shade, lit, smoothstep(0.35, 0.8, n2) * (0.65 + 0.35 * pow(mu, 3.0)));
+    col = mix(col, cloud, cov * 0.9);
+  }
+  if (withSun) col += uSunColor * smoothstep(0.99993, 0.99997, mu) * 14.0 * (1.0 - cov);
+  return col;
+}`;
+
+// ---------------------------------------------------------------------------
+// Renderer, scene, camera
+// ---------------------------------------------------------------------------
+const canvas = document.getElementById('scene');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
+} catch (e) {
+  document.getElementById('loadingText').textContent = 'This view needs WebGL 2. Try a recent Chrome, Edge, Firefox or Safari.';
+  throw e;
+}
+renderer.setPixelRatio(Math.min(devicePixelRatio, isSmall ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.55;
+renderer.shadowMap.enabled = !isSmall;
+renderer.shadowMap.type = THREE.PCFShadowMap;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x9fb6c8, 0.000032);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.4, 90000);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxDistance = 14000;
+controls.minDistance = 3;
+controls.maxPolarAngle = Math.PI * 0.495;
+
+const sun = new THREE.DirectionalLight(0xffffff, 3);
+sun.castShadow = renderer.shadowMap.enabled;
+sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 1.5;
+scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight(0xbcd4ee, 0x6b5f48, 0.9);
+scene.add(hemi);
+
+const skyUniforms = {
+  uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+  uSunColor: { value: new THREE.Color() },
+  uZenith: { value: new THREE.Color() },
+  uHorizon: { value: new THREE.Color() },
+  uCloudTime: { value: 0 },
+  uCloudCover: { value: 0.42 },
+};
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: skyUniforms,
+  side: THREE.BackSide,
+  depthWrite: false,
+  fog: false,
+  vertexShader: /* glsl */`
+    #include <common>
+    #include <logdepthbuf_pars_vertex>
+    varying vec3 vDir;
+    void main() {
+      vDir = normalize(position);
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * viewMatrix * wp;
+      #include <logdepthbuf_vertex>
+    }`,
+  fragmentShader: /* glsl */`
+    #include <logdepthbuf_pars_fragment>
+    ${GLSL_NOISE}
+    ${GLSL_SKY}
+    varying vec3 vDir;
+    void main() {
+      #include <logdepthbuf_fragment>
+      gl_FragColor = vec4(skyColor(normalize(vDir), true), 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(60000, 48, 24), skyMat);
+// Image-based light from the same sky, so wet sand and rock pick up its colour and reflections
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envScene = new THREE.Scene();
+envScene.add(new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), skyMat));
+let envRT = null, envQueued = false;
+function updateEnv() {
+  if (envQueued) return;
+  envQueued = true;
+  requestAnimationFrame(() => {
+    envQueued = false;
+    const rt = pmrem.fromScene(envScene, 0, 1, 1000);
+    if (envRT) envRT.dispose();
+    envRT = rt;
+    scene.environment = rt.texture;
+  });
+}
+sky.renderOrder = -10;
+sky.frustumCulled = false;
+scene.add(sky);
+
+// ---------------------------------------------------------------------------
+// Ocean
+// ---------------------------------------------------------------------------
+const oceanUniforms = {
+  ...skyUniforms,
+  uTime: { value: 0 },
+  uPhaseT: { value: 0 },
+  uGroupPhase: { value: 0 },
+  uSea: { value: 0 },
+  uH0: { value: 1.6 },
+  uOmega: { value: 2 * Math.PI / 11 },
+  uK0: { value: 0 },
+  uKRef: { value: 0 },
+  uD0: { value: new THREE.Vector2(1, 0) },
+  uChop: { value: 0.35 },
+  uWave: { value: null },
+  uWaveOrigin: { value: new THREE.Vector2() },
+  uWaveCell: { value: 1 },
+  uWaveSize: { value: new THREE.Vector2(1, 1) },
+  uFogColor: { value: new THREE.Color() },
+  uFogDensity: { value: 0.000032 },
+  uDeep: { value: new THREE.Color(0.010, 0.050, 0.068) },
+  uShallow: { value: new THREE.Color(0.080, 0.210, 0.190) },
+};
+
+const GLSL_WAVES = /* glsl */`
+uniform float uTime, uPhaseT, uGroupPhase, uSea, uH0, uOmega, uK0, uKRef, uChop, uWaveCell;
+uniform vec2 uD0, uWaveOrigin, uWaveSize;
+uniform sampler2D uWave;
+
+vec4 waveTexel(vec2 p, out vec2 pc) {
+  vec2 g = (p - uWaveOrigin) / uWaveCell;
+  vec2 gc = clamp(g, vec2(0.0), uWaveSize - 1.001);
+  pc = uWaveOrigin + gc * uWaveCell;
+  ivec2 i = ivec2(floor(gc));
+  vec2 f = gc - vec2(i);
+  vec4 a = texelFetch(uWave, i, 0), b = texelFetch(uWave, i + ivec2(1, 0), 0);
+  vec4 c = texelFetch(uWave, i + ivec2(0, 1), 0), d = texelFetch(uWave, i + ivec2(1, 1), 0);
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// Approximate solution of the dispersion relation (Fenton & McKee 1990)
+float waveK(float h) { return uK0 / pow(tanh(pow(uK0 * h, 0.75)), 0.6667); }
+
+struct WaveInfo { float br; float th; float h; float A; float surf; };
+
+vec3 gerstner(vec2 p, vec2 dir, float lambda, float amp, float q, float speedMul, inout vec3 acc) {
+  float k = 6.28318 / lambda;
+  float w = sqrt(9.81 * k) * speedMul;
+  float th = k * dot(dir, p) - w * uTime;
+  acc += vec3(-dir.x * q * amp * sin(th), amp * cos(th), -dir.y * q * amp * sin(th));
+  return acc;
+}
+
+vec3 waveDisp(vec2 p, float lod, out WaveInfo info) {
+  vec2 pc;
+  vec4 w = waveTexel(p, pc);
+  float h = uSea - w.y;
+  float hh = max(h, 0.04);
+  float k = waveK(hh);
+  float kh = k * hh;
+  float n = 0.5 * (1.0 + 2.0 * kh / sinh(min(2.0 * kh, 30.0)));
+  float Ks = sqrt((9.81 / (2.0 * uOmega)) / (n * uOmega / k));
+  vec2 dir = vec2(cos(w.z), sin(w.z));
+
+  // phase, continued outside the computed grid as a plane wave
+  float phi = w.x + uKRef * dot(uD0, p - pc);
+  phi += 1.4 * (vnoise(p * 0.0021 + vec2(0.0, uTime * 0.004)) - 0.5);
+  float env = 0.74 + 0.36 * sin(phi / 8.0 - uGroupPhase) * (0.55 + 0.45 * vnoise(p * 0.0012 + 11.0));
+  env *= 0.86 + 0.28 * vnoise(p * 0.004 + vec2(uTime * 0.01, 3.0));
+
+  float Hp = uH0 * Ks * w.w * env;
+  float ratio = Hp / hh;
+  float br = smoothstep(0.55, 0.8, ratio) * step(0.0, h + 0.8);
+  float H = min(Hp, 0.8 * hh);
+  // broken waves keep running up the sand as bores
+  H = max(H, 0.34 * uH0 * w.w * env * clamp(1.0 + h / 1.1, 0.0, 1.0) * smoothstep(3.2, 0.4, h));
+  H *= lod;
+  float A = 0.5 * H;
+
+  float th = phi - uPhaseT;
+  float sh = clamp(1.0 - kh / 1.1, 0.0, 1.0);
+  float m = 1.0 + 3.0 * sh;
+  float c = 0.5 + 0.5 * cos(th);
+  float meanM = inversesqrt(3.14159 * (m + 0.25));
+  float y = A * 2.0 * (pow(c, m) - meanM);
+  float horiz = min(A, 0.8 / k) * (0.45 + 0.4 * br);
+  vec2 dxz = -dir * horiz * sin(th) + dir * (0.5 * br * A * pow(c, 5.0));
+  vec3 disp = vec3(dxz.x, y, dxz.y);
+
+  // wind chop, damped in the surf zone and very shallow water
+  float att = uChop * smoothstep(0.15, 2.5, h) * (1.0 - 0.55 * br) * lod;
+  vec2 d1 = vec2(cos(-0.45), sin(-0.45)), d2 = vec2(cos(0.35), sin(0.35)), d3 = vec2(cos(1.0), sin(1.0));
+  mat2 rot = mat2(uD0.x, uD0.y, -uD0.y, uD0.x);
+  vec3 chop = vec3(0.0);
+  gerstner(p, rot * d1, 23.0, 0.20 * att, 0.6, 1.0, chop);
+  gerstner(p, rot * d2, 13.5, 0.11 * att, 0.6, 1.0, chop);
+  gerstner(p, rot * d3, 7.7, 0.06 * att, 0.5, 1.0, chop);
+  gerstner(p, rot * vec2(0.92, -0.39), 4.3, 0.03 * att, 0.4, 1.0, chop);
+  disp += chop;
+
+  info.br = br; info.th = th; info.h = h; info.A = A; info.surf = smoothstep(0.45, 0.75, ratio);
+  return disp;
+}`;
+
+const oceanMat = new THREE.ShaderMaterial({
+  uniforms: oceanUniforms,
+  transparent: true,
+  depthWrite: true,
+  fog: false,
+  vertexShader: /* glsl */`
+    #include <common>
+    #include <logdepthbuf_pars_vertex>
+    ${GLSL_NOISE}
+    ${GLSL_WAVES}
+    varying vec2 vP0;
+    varying vec3 vWorld;
+    varying float vLod;
+    void main() {
+      vec2 p = position.xz;
+      float dist = length(p - cameraPosition.xz);
+      float lod = 1.0 - smoothstep(5000.0, 18000.0, dist);
+      WaveInfo info;
+      vec3 d = waveDisp(p, lod, info);
+      vec3 wp = vec3(p.x + d.x, uSea + d.y, p.y + d.z);
+      // lift the thin swash sheet slightly so its edge is cut per pixel (in the fragment shader), not by mesh triangles
+      wp.y += 0.25 * smoothstep(0.8, -0.2, info.h) * step(-1.2, info.h);
+      if (info.h < -1.2) wp.y = uSea - 0.05;  // under the land, keep it flat and out of sight
+      vP0 = p; vWorld = wp; vLod = lod;
+      gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      #include <logdepthbuf_vertex>
+    }`,
+  fragmentShader: /* glsl */`
+    #include <logdepthbuf_pars_fragment>
+    ${GLSL_NOISE}
+    ${GLSL_SKY}
+    ${GLSL_WAVES}
+    uniform vec3 uFogColor, uDeep, uShallow;
+    uniform float uFogDensity;
+    varying vec2 vP0;
+    varying vec3 vWorld;
+    varying float vLod;
+
+    float foamPattern(vec2 p, vec2 dir) {
+      vec2 q = p * 0.35 + dir * uTime * 0.25;
+      float a = vnoise(q * 0.4) * 0.6 + vnoise(q * 1.1 + 5.0) * 0.4;
+      float lace = 1.0 - abs(2.0 * vnoise(q * 2.7 - uTime * 0.05) - 1.0);
+      lace *= 1.0 - abs(2.0 * vnoise(q * 6.3 + 9.0) - 1.0);
+      return clamp(a * 0.55 + lace * 0.75, 0.0, 1.0);
+    }
+
+    void main() {
+      #include <logdepthbuf_fragment>
+      vec3 toCam = cameraPosition - vWorld;
+      float dist = length(toCam);
+      vec3 V = toCam / dist;
+      float e = clamp(dist * 0.0025, 0.35, 30.0);
+      WaveInfo info, ix, iz;
+      vec3 D = waveDisp(vP0, vLod, info);
+      vec3 Dx = waveDisp(vP0 + vec2(e, 0.0), vLod, ix);
+      vec3 Dz = waveDisp(vP0 + vec2(0.0, e), vLod, iz);
+      vec3 Tx = vec3(e, 0.0, 0.0) + Dx - D;
+      vec3 Tz = vec3(0.0, 0.0, e) + Dz - D;
+      vec3 N = normalize(cross(Tz, Tx));
+
+      // capillary ripples, faded with distance to avoid shimmer
+      float rf = (1.0 - smoothstep(40.0, 900.0, dist)) * (0.35 + uChop);
+      vec2 rp = vP0 * 0.9 + uTime * vec2(0.3, 0.12);
+      float r0 = fbm4(rp), r1 = fbm4(rp + vec2(0.25, 0.0)), r2 = fbm4(rp + vec2(0.0, 0.25));
+      N = normalize(N + vec3(r0 - r1, 0.0, r0 - r2) * 1.4 * rf);
+
+      float NdV = max(dot(N, V), 0.0);
+      vec3 R = reflect(-V, N);
+      R.y = abs(R.y);
+      vec3 refl = skyColor(normalize(R), false);
+      float F = 0.02 + 0.98 * pow(1.0 - NdV, 5.0);
+
+      float thick = info.h + D.y;          // water column under this point of the surface
+      thick += (vnoise(vP0 * 0.6 + uTime * 0.2) - 0.5) * 0.06;
+      if (thick < 0.0) discard;
+      float h = max(info.h, 0.0);
+      float sunUp = smoothstep(-0.05, 0.15, uSunDir.y);
+      vec3 ambient = mix(uHorizon, uZenith, 0.5) * 0.55;
+      vec3 body = mix(uShallow, uDeep, smoothstep(0.5, 9.0, h));
+      // sandy, sediment-laden water in the surf zone
+      body = mix(body, vec3(0.20, 0.22, 0.16), info.surf * 0.35 * smoothstep(5.0, 0.5, h));
+      float NdL = max(dot(N, uSunDir), 0.0);
+      vec3 water = body * (ambient + uSunColor * (0.18 + 0.25 * NdL) * sunUp);
+      // light through thin crests
+      float crest = clamp(info.A > 0.01 ? (D.y / (info.A * 2.0) + 0.2) : 0.0, 0.0, 1.0);
+      float back = pow(clamp(dot(V, -uSunDir) * 0.5 + 0.5, 0.0, 1.0), 3.0);
+      water += vec3(0.05, 0.22, 0.18) * uSunColor * crest * (0.25 + back) * 0.35 * sunUp;
+
+      vec3 col = mix(water, refl, F);
+      vec3 H = normalize(V + uSunDir);
+      float rough = mix(1.0, 0.35, smoothstep(300.0, 6000.0, dist));
+      float spec = pow(max(dot(N, H), 0.0), 900.0 * rough) * 9.0 + pow(max(dot(N, H), 0.0), 90.0 * rough) * 0.25;
+      col += uSunColor * spec * F * 4.0 * sunUp;
+
+      // whitewater: on the breaking face, trailing behind the crest, plus lingering surf-zone foam
+      float tm = mod(info.th, 6.28318);
+      float face = exp(-tm * 5.0) + exp(-(6.28318 - tm) * 1.1);
+      float pattern = foamPattern(vP0, vec2(1.0, 0.0));
+      float foam = info.br * face * (0.55 + 0.7 * pattern);
+      foam += info.surf * 0.22 * smoothstep(0.62, 0.9, pattern);
+      foam += smoothstep(0.18, 0.02, thick) * smoothstep(0.35, 0.75, pattern) * 0.7;
+      foam = clamp(foam, 0.0, 1.0) * (1.0 - smoothstep(2500.0, 9000.0, dist));
+      vec3 foamCol = vec3(0.92, 0.94, 0.95) * (ambient * 1.3 + uSunColor * (0.35 + 0.4 * NdL) * sunUp);
+      col = mix(col, foamCol, foam);
+
+      // depth-based transparency over sand
+      float path = thick / max(NdV, 0.2);
+      float alpha = 1.0 - exp(-path * 1.1);
+      alpha = clamp(max(alpha, foam), 0.0, 1.0);
+      alpha = max(alpha, F * 0.9 * smoothstep(0.0, 0.3, thick));
+
+      float fogF = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
+      col = mix(col, uFogColor, fogF);
+      gl_FragColor = vec4(col, alpha);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+
+function makeOceanGeometry(N, cx, cz, A, B) {
+  const pos = new Float32Array((N + 1) * (N + 1) * 3);
+  const map = (u) => Math.sign(u) * (A * Math.abs(u) + B * Math.abs(u) ** 6);
+  let o = 0;
+  for (let j = 0; j <= N; j++) {
+    const z = cz + map(j / N * 2 - 1);
+    for (let i = 0; i <= N; i++) { pos[o++] = cx + map(i / N * 2 - 1); pos[o++] = 0; pos[o++] = z; }
+  }
+  const idx = new Uint32Array(N * N * 6);
+  o = 0;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
+    idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  return g;
+}
+let ocean = null;
+
+// ---------------------------------------------------------------------------
+// Terrain meshes
+// ---------------------------------------------------------------------------
+const terrainUniforms = { uSea: oceanUniforms.uSea, uWetH: { value: 0.9 } };
+function terrainMaterial(map) {
+  const m = new THREE.MeshStandardMaterial({ map, roughness: 0.93, metalness: 0 });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uSea = terrainUniforms.uSea;
+    sh.uniforms.uWetH = terrainUniforms.uWetH;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vWY;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWY = (modelMatrix * vec4(transformed, 1.0)).y;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vWY;\nuniform float uSea;\nuniform float uWetH;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\nfloat wet = smoothstep(uSea + uWetH, uSea + 0.05, vWY);\ndiffuseColor.rgb *= mix(1.0, 0.72, wet);')
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.22, wet);');
+  };
+  return m;
+}
+
+function buildTerrainMesh(land, colorTex, segs) {
+  const nx = Math.min(segs, land.W - 1), nz = Math.round(nx * (land.zmax - land.zmin) / (land.xmax - land.xmin));
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array((nx + 1) * (nz + 1) * 3), uv = new Float32Array((nx + 1) * (nz + 1) * 2);
+  let o = 0, u = 0;
+  for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
+    const x = land.xmin + (land.xmax - land.xmin) * i / nx, z = land.zmin + (land.zmax - land.zmin) * j / nz;
+    let y = sampleGrid(land, land.bed, x, z);
+    if (i === 0 || j === 0 || i === nx || j === nz) y -= 30; // skirt hides the edge seam
+    pos[o++] = x; pos[o++] = y; pos[o++] = z;
+    uv[u++] = i / nx; uv[u++] = 1 - j / nz;
+  }
+  const idx = new Uint32Array(nx * nz * 6);
+  o = 0;
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
+    idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d;
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, terrainMaterial(colorTex));
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
+}
+
+// Low-detail apron that carries the edge of the map out to the horizon, so land does not end in a cliff.
+function buildApron(land, colorTex) {
+  const N = 80, R = 45000;
+  const cx = (land.xmin + land.xmax) / 2, cz = (land.zmin + land.zmax) / 2;
+  const map = (t) => Math.sign(t) * R * Math.abs(t) ** 2.2;
+  const pos = new Float32Array((N + 1) * (N + 1) * 3), uv = new Float32Array((N + 1) * (N + 1) * 2);
+  let o = 0, u = 0;
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+    const x = cx + map(i / N * 2 - 1), z = cz + map(j / N * 2 - 1);
+    const xc = clamp(x, land.xmin, land.xmax), zc = clamp(z, land.zmin, land.zmax);
+    let y = sampleGrid(land, land.bed, xc, zc) - 1.5;
+    const out = Math.hypot(x - xc, z - zc);
+    if (y > 0) y += 18 * (fbm(x / 3000, z / 3000, 3) - 0.3) * smooth(0, 3000, out);
+    pos[o++] = x; pos[o++] = y; pos[o++] = z;
+    uv[u++] = (xc - land.xmin) / (land.xmax - land.xmin); uv[u++] = 1 - (zc - land.zmin) / (land.zmax - land.zmin);
+  }
+  const idx = new Uint32Array(N * N * 6);
+  o = 0;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
+    idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, terrainMaterial(colorTex));
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// ---------------------------------------------------------------------------
+// State, sun, UI
+// ---------------------------------------------------------------------------
+const state = {
+  land: null, terrain: null, apron: null, colorTex: null, waveTex: null, field: null,
+  H0: 1.6, T: 11, dir: 285, tide: 0.6, chop: 0.35, tod: 16, view: 'overview',
+};
+
+function londonOffsetHours(date) {
+  try {
+    const s = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', timeZoneName: 'shortOffset' }).formatToParts(date)
+      .find(p => p.type === 'timeZoneName').value; // "GMT" or "GMT+1"
+    const m = s.match(/GMT([+-]\d+)?/);
+    return m && m[1] ? parseInt(m[1], 10) : 0;
+  } catch { return 0; }
+}
+// Approximate solar position (U.S. Naval Observatory low-precision formulae), good to a fraction of a degree.
+function sunPosition(date, lat, lon) {
+  const rad = Math.PI / 180;
+  const d = date.getTime() / 86400000 - 10957.5;
+  const g = rad * (357.529 + 0.98560028 * d);
+  const q = 280.459 + 0.98564736 * d;
+  const L = rad * (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g));
+  const e = rad * (23.439 - 0.00000036 * d);
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
+  const dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const gmst = ((18.697374558 + 24.06570982441908 * d) % 24 + 24) % 24;
+  const H = rad * (gmst * 15 + lon) - ra;
+  const la = lat * rad;
+  const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(H));
+  const az = Math.atan2(-Math.sin(H), Math.tan(dec) * Math.cos(la) - Math.sin(la) * Math.cos(H));
+  return { el, az };
+}
+const today = new Date();
+function dateForTod(tod) {
+  const off = londonOffsetHours(today);
+  const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0));
+  return new Date(d.getTime() + (tod - off) * 3600000);
+}
+
+const tmpC = new THREE.Color();
+function updateSun() {
+  const { el, az } = sunPosition(dateForTod(state.tod), LAT0, LON0);
+  const dir = new THREE.Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), -Math.cos(el) * Math.cos(az));
+  const s = Math.sin(el);
+  const day = smooth(-0.12, 0.3, s);
+  const low = (1 - smooth(0.0, 0.4, s)) * smooth(-0.14, 0.02, s);
+  const sunCol = new THREE.Color(1.0, 0.96, 0.9).lerp(tmpC.setRGB(1.0, 0.42, 0.14), low).multiplyScalar(4.2 * smooth(-0.06, 0.1, s));
+  const zen = new THREE.Color(0.006, 0.01, 0.026).lerp(tmpC.setRGB(0.12, 0.27, 0.62), day).lerp(tmpC.setRGB(0.16, 0.20, 0.42), low * 0.6);
+  const hor = new THREE.Color(0.016, 0.022, 0.04).lerp(tmpC.setRGB(0.62, 0.74, 0.88), day).lerp(tmpC.setRGB(1.1, 0.56, 0.3), low * 0.8);
+  // a sun below the horizon still lights the sky a little
+  const sd = dir.clone(); if (sd.y < 0.02) sd.y = 0.02; sd.normalize();
+  skyUniforms.uSunDir.value.copy(dir);
+  skyUniforms.uSunColor.value.copy(sunCol);
+  skyUniforms.uZenith.value.copy(zen).multiplyScalar(1.7);
+  skyUniforms.uHorizon.value.copy(hor).multiplyScalar(1.7);
+  const fogC = hor.clone().multiplyScalar(1.15);
+  oceanUniforms.uFogColor.value.copy(fogC);
+  scene.fog.color.copy(fogC);
+  sun.position.copy(sd).multiplyScalar(9000);
+  sun.color.copy(sunCol).multiplyScalar(1 / 4.2);
+  sun.intensity = 3.4 * smooth(-0.02, 0.12, s);
+  hemi.color.copy(zen).lerp(hor, 0.5).multiplyScalar(1.6);
+  hemi.intensity = 0.1 + 0.35 * day;
+  scene.environmentIntensity = 0.35 + 0.65 * day;
+  updateEnv();
+  renderer.toneMappingExposure = 0.5 + 0.35 * (1 - day);
+  const hh = Math.floor(state.tod), mm = Math.round((state.tod - hh) * 60) % 60;
+  const elDeg = el * 180 / Math.PI;
+  document.getElementById('roSun').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${elDeg >= 0 ? elDeg.toFixed(0) + '°' : 'set'}`;
+  document.getElementById('oTod').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+const compass = (deg) => ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(((deg % 360) / 22.5)) % 16];
+function updateReadouts() {
+  document.getElementById('oSwellH').textContent = `${state.H0.toFixed(1)} m`;
+  document.getElementById('oSwellT').textContent = `${state.T.toFixed(1)} s`;
+  document.getElementById('oSwellDir').textContent = `${state.dir}° ${compass(state.dir)}`;
+  document.getElementById('oTide').textContent = `${state.tide >= 0 ? '+' : ''}${state.tide.toFixed(1)} m`;
+  document.getElementById('oChop').textContent = state.chop < 0.15 ? 'glassy' : state.chop < 0.5 ? 'light' : state.chop < 0.8 ? 'moderate' : 'choppy';
+  document.getElementById('roSwell').textContent = `${state.H0.toFixed(1)} m · ${state.T.toFixed(0)} s`;
+  document.getElementById('roDir').textContent = `${state.dir}° ${compass(state.dir)}`;
+  document.getElementById('roTide').textContent = `${state.tide >= 0 ? '+' : ''}${state.tide.toFixed(1)} m`;
+}
+
+function applySeaUniforms() {
+  const omega = 2 * Math.PI / state.T;
+  oceanUniforms.uH0.value = state.H0;
+  oceanUniforms.uOmega.value = omega;
+  oceanUniforms.uK0.value = omega * omega / G;
+  oceanUniforms.uSea.value = state.tide;
+  oceanUniforms.uChop.value = state.chop;
+  terrainUniforms.uWetH.value = 0.25 + 0.45 * state.H0;
+}
+
+function rebuildWaves() {
+  const land = state.land;
+  if (!land) return;
+  const res = isSmall ? 384 : 640;
+  const f = buildWaveField(land, res, state.tide, state.T, state.dir);
+  state.field = f;
+  if (state.waveTex) state.waveTex.dispose();
+  const tex = new THREE.DataTexture(f.data, f.Gx, f.Gz, THREE.RGBAFormat, THREE.FloatType);
+  tex.minFilter = tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  state.waveTex = tex;
+  oceanUniforms.uWave.value = tex;
+  oceanUniforms.uWaveOrigin.value.set(f.x0, f.z0);
+  oceanUniforms.uWaveCell.value = f.cs;
+  oceanUniforms.uWaveSize.value.set(f.Gx, f.Gz);
+  oceanUniforms.uKRef.value = f.kRef;
+  oceanUniforms.uD0.value.copy(f.d0);
+}
+let waveTimer = 0;
+function scheduleWaves() { clearTimeout(waveTimer); waveTimer = setTimeout(rebuildWaves, 140); }
+
+// Camera presets are placed relative to the waterline found in the data, so they work for model and satellite terrain.
+function groundAt(x, z) { return state.land ? sampleGrid(state.land, state.land.bed, x, z) : 0; }
+function shorelineX(z, level = state.tide) {
+  const L = state.land;
+  for (let x = L.xmin; x < L.xmax; x += 5) if (groundAt(x, z) > level) return x;
+  return 0;
+}
+function breakX(z) {
+  const xs = shorelineX(z), need = 1.6 * state.H0 / 0.78;
+  for (let x = xs; x > state.land.xmin; x -= 5) if (state.tide - groundAt(x, z) > need) return x;
+  return xs - 300;
+}
+const tweens = [];
+function flyTo(pos, target, ms = 1600) {
+  const p0 = camera.position.clone(), t0 = controls.target.clone(), start = performance.now();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  tweens.length = 0;
+  tweens.push((now) => {
+    const t = reduce ? 1 : clamp((now - start) / ms, 0, 1);
+    const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    camera.position.lerpVectors(p0, pos, k);
+    controls.target.lerpVectors(t0, target, k);
+    return t >= 1;
+  });
+}
+function setView(name, instant = false) {
+  state.view = name;
+  document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === name)));
+  const zMid = toLocal(51.100, LON0).z;
+  const xs = shorelineX(zMid);
+  let pos, tgt;
+  if (name === 'overview') {
+    pos = new THREE.Vector3(xs - 3300, 820, zMid + 2300);
+    tgt = new THREE.Vector3(xs + 200, 0, zMid - 500);
+  } else if (name === 'beach') {
+    const z = zMid + 150, x = xs + 45;
+    pos = new THREE.Vector3(x, Math.max(groundAt(x, z), state.tide) + 1.7, z);
+    tgt = new THREE.Vector3(xs - 420, state.tide + 0.8, z - 120);
+  } else if (name === 'lineup') {
+    const z = zMid - 200, xb = breakX(z);
+    pos = new THREE.Vector3(xb - 45, state.tide + 1.4, z + 20);
+    tgt = new THREE.Vector3(xs + 220, state.tide + 6, z - 80);
+  } else {
+    const hz = zMid - 2050, hx = shorelineX(hz, 3.5) + 300;
+    pos = new THREE.Vector3(hx, groundAt(hx, hz) + 45, hz);
+    tgt = new THREE.Vector3(shorelineX(zMid + 900, 0) - 150, state.tide, zMid + 900);
+  }
+  if (instant) { camera.position.copy(pos); controls.target.copy(tgt); controls.update(); }
+  else flyTo(pos, tgt);
+}
+
+const loadingEl = document.getElementById('loading'), loadingText = document.getElementById('loadingText');
+const progress = (t) => { loadingText.textContent = t; };
+function setAttribution(text) {
+  document.getElementById('attrib').textContent = text;
+  document.getElementById('attribInline').textContent = text;
+}
+
+async function installLand(land, colorCanvas) {
+  state.land = land;
+  if (state.terrain) { scene.remove(state.terrain); state.terrain.geometry.dispose(); state.terrain.material.dispose(); }
+  if (state.apron) { scene.remove(state.apron); state.apron.geometry.dispose(); state.apron.material.dispose(); }
+  if (state.colorTex) state.colorTex.dispose();
+  const tex = new THREE.CanvasTexture(colorCanvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  state.colorTex = tex;
+  progress('Building the terrain');
+  await nextFrame();
+  state.terrain = buildTerrainMesh(land, tex, isSmall ? 384 : 768);
+  state.apron = buildApron(land, tex);
+  scene.add(state.terrain, state.apron);
+  // shadow camera covers the mapped area
+  const span = Math.max(land.xmax - land.xmin, land.zmax - land.zmin) / 2;
+  const cx = (land.xmin + land.xmax) / 2, cz = (land.zmin + land.zmax) / 2;
+  sun.target.position.set(cx, 0, cz);
+  Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 10, far: 30000 });
+  sun.shadow.camera.updateProjectionMatrix();
+  progress('Refracting the swell');
+  await nextFrame();
+  if (!ocean) {
+    const xs = (() => { for (let x = land.xmin; x < land.xmax; x += 5) if (sampleGrid(land, land.bed, x, 0) > state.tide) return x; return 0; })();
+    ocean = new THREE.Mesh(makeOceanGeometry(isSmall ? 320 : 640, xs - 900, 0, 2600, 42000), oceanMat);
+    ocean.frustumCulled = false;
+    ocean.renderOrder = 2;
+    scene.add(ocean);
+  }
+  rebuildWaves();
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+function bindRange(id, key, onChange) {
+  const el = document.getElementById(id);
+  el.value = state[key];
+  el.addEventListener('input', () => { state[key] = parseFloat(el.value); updateReadouts(); onChange(); });
+}
+
+async function loadModel() {
+  const land = await buildModelLand(isSmall ? 640 : 1024, progress);
+  const cv = await paintModel(land, isSmall ? 1536 : 2048, progress);
+  await installLand(land, cv);
+  document.getElementById('srcLabel').textContent = 'Modelled terrain';
+  setAttribution('Terrain: approximate hand-built model of Saunton, not survey data. Add a map key for real imagery.');
+}
+
+async function loadSatellite() {
+  const provider = document.getElementById('provider').value;
+  const key = document.getElementById('apiKey').value.trim();
+  const status = document.getElementById('satStatus');
+  const btn = document.getElementById('loadSat');
+  if (!key) { status.dataset.tone = 'error'; status.textContent = 'Paste a token or key first.'; return; }
+  try {
+    if (document.getElementById('rememberKey').checked) {
+      localStorage.setItem('saunton.key.' + provider, key);
+      localStorage.setItem('saunton.provider', provider);
+    } else localStorage.removeItem('saunton.key.' + provider);
+  } catch { /* storage unavailable */ }
+  btn.disabled = true;
+  status.dataset.tone = '';
+  loadingEl.dataset.done = 'false';
+  try {
+    const land = await loadTileLand(provider, key, renderer.capabilities.maxTextureSize, (t) => { progress(t); status.textContent = t; });
+    await installLand(land, land.satCanvas);
+    document.getElementById('srcLabel').textContent = `Satellite · ${PROVIDERS[provider].name}`;
+    setAttribution(land.attrib + ' · Seabed below low water is modelled, not surveyed.');
+    status.dataset.tone = 'ok';
+    status.textContent = 'Satellite terrain loaded.';
+    setView(state.view, true);
+  } catch (e) {
+    status.dataset.tone = 'error';
+    if (e.kind === 'http' && (e.status === 401 || e.status === 403)) status.textContent = `${PROVIDERS[provider].name} refused the key (HTTP ${e.status}). Check the key and any URL restrictions on it.`;
+    else if (e.kind === 'http') status.textContent = `The tile server answered HTTP ${e.status}. Try again in a moment.`;
+    else status.textContent = 'Could not reach the map server. Pages hosted on claude.ai block map servers, so open this page from GitHub Pages or a local web server.';
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    loadingEl.dataset.done = 'true';
+  }
+}
+
+async function boot() {
+  // Start at the real current time in Saunton when the sun is up, otherwise late afternoon
+  const off = londonOffsetHours(today);
+  const nowLocal = today.getUTCHours() + off + today.getUTCMinutes() / 60;
+  const { el } = sunPosition(today, LAT0, LON0);
+  state.tod = el > 0.1 ? Math.round(nowLocal * 12) / 12 : 16;
+
+  bindRange('swellH', 'H0', applySeaUniforms);
+  bindRange('swellT', 'T', () => { applySeaUniforms(); scheduleWaves(); });
+  bindRange('swellDir', 'dir', scheduleWaves);
+  bindRange('tide', 'tide', () => { applySeaUniforms(); scheduleWaves(); });
+  bindRange('chop', 'chop', applySeaUniforms);
+  bindRange('tod', 'tod', updateSun);
+  updateReadouts();
+  applySeaUniforms();
+  updateSun();
+
+  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+  const panel = document.getElementById('panel'), toggle = document.getElementById('panelToggle');
+  toggle.addEventListener('click', () => {
+    const collapsed = panel.dataset.collapsed !== 'true';
+    panel.dataset.collapsed = String(collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+  });
+  if (isSmall && innerWidth < 700) { panel.dataset.collapsed = 'true'; toggle.setAttribute('aria-expanded', 'false'); }
+  document.getElementById('loadSat').addEventListener('click', loadSatellite);
+  document.getElementById('useModel').addEventListener('click', async () => {
+    loadingEl.dataset.done = 'false';
+    await loadModel();
+    setView(state.view, true);
+    loadingEl.dataset.done = 'true';
+    const s = document.getElementById('satStatus'); s.dataset.tone = ''; s.textContent = 'Showing the modelled terrain.';
+  });
+  try {
+    const p = localStorage.getItem('saunton.provider');
+    if (p && PROVIDERS[p]) document.getElementById('provider').value = p;
+    const k = localStorage.getItem('saunton.key.' + document.getElementById('provider').value);
+    if (k) document.getElementById('apiKey').value = k;
+  } catch { /* storage unavailable */ }
+  document.getElementById('provider').addEventListener('change', (e) => {
+    try { document.getElementById('apiKey').value = localStorage.getItem('saunton.key.' + e.target.value) || ''; } catch { /* storage unavailable */ }
+  });
+
+  await loadModel();
+  setView('overview', true);
+  loadingEl.dataset.done = 'true';
+  window.__ready = true;
+}
+
+let lastT = performance.now();
+function frame() {
+  const nowT = performance.now();
+  const dt = Math.min((nowT - lastT) / 1000, 0.1);
+  lastT = nowT;
+  const t = (oceanUniforms.uTime.value += dt);
+  const omega = oceanUniforms.uOmega.value;
+  oceanUniforms.uPhaseT.value = (oceanUniforms.uPhaseT.value + omega * dt) % (Math.PI * 2);
+  oceanUniforms.uGroupPhase.value = (oceanUniforms.uGroupPhase.value + omega * 0.6 * dt / 8) % (Math.PI * 2);
+  skyUniforms.uCloudTime.value = t;
+  const now = performance.now();
+  if (tweens.length && tweens[0](now)) tweens.length = 0;
+  controls.update();
+  // keep the camera above sand and water
+  if (state.land) {
+    const minY = Math.max(groundAt(camera.position.x, camera.position.z), state.tide) + 1.0;
+    if (camera.position.y < minY) camera.position.y = minY;
+  }
+  sky.position.copy(camera.position);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+boot().catch((e) => {
+  console.error(e);
+  loadingText.textContent = 'Something went wrong while building the scene. Reload to try again.';
+});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
