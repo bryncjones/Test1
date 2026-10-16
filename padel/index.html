@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Patch Padel</title>
+<style>
+  :root {
+    --bg: #f4f6f3; --card: #ffffff; --ink: #1c2420; --muted: #5f6b64; --line: #d9dfda;
+    --accent: #1f7a4d; --accent-ink: #ffffff; --accent-soft: #e3f1e9; --danger: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121614; --card: #1b211e; --ink: #e8eee9; --muted: #9aa8a0; --line: #2f3833;
+      --accent: #4cc489; --accent-ink: #0d1a13; --accent-soft: #1f3329; --danger: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 16px; display: flex; align-items: center; justify-content: space-between;
+    max-width: 560px; margin: 0 auto; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  header h1 span { color: var(--accent); }
+  header button { font-size: 14px; }
+  main { max-width: 560px; margin: 0 auto; padding: 0 16px 48px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+  .step { font-size: 13px; color: var(--muted); margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+  h2 { margin: 0 0 16px; font-size: 22px; }
+  h3 { margin: 0 0 8px; font-size: 16px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin: 14px 0 6px; }
+  .hint { font-weight: 400; color: var(--muted); }
+  input, select { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--bg); color: var(--ink); font: inherit; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+  .row4 { display: grid; gap: 10px; grid-template-columns: repeat(4, 1fr); }
+  .row4 label, .row label { margin-top: 0; font-weight: 500; color: var(--muted); font-size: 13px; }
+  @media (max-width: 400px) { .row4 { grid-template-columns: 1fr 1fr; } }
+  button { font: inherit; cursor: pointer; border-radius: 10px; padding: 11px 16px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.link { border: none; background: none; color: var(--accent); padding: 4px 0; }
+  .actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .actions button { flex: 1 1 140px; }
+  .error { color: var(--danger); font-size: 14px; margin-top: 12px; min-height: 1em; }
+  .muted { color: var(--muted); }
+  .players { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin-top: 12px; }
+  .players label { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 10px; font-weight: 500;
+    border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  .players label.on { background: var(--accent-soft); border-color: var(--accent); }
+  .players input { width: auto; }
+  .lvl { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .selectall { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
+  .selectall input { width: auto; }
+  .summary { background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+  .summary b { display: inline-block; min-width: 90px; }
+  ul.invites { list-style: none; padding: 0; margin: 12px 0 0; }
+  ul.invites li { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 0; border-top: 1px solid var(--line); }
+  ul.invites a { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .match { padding: 12px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .match:first-of-type { border-top: none; }
+  .big { font-size: 40px; text-align: center; margin: 8px 0; }
+  .center { text-align: center; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Patch <span>Padel</span></h1>
+  <button id="btnProfile" class="link" hidden>My profile</button>
+</header>
+<main id="app"></main>
+
+<script>
+// ---------- Config (from the MVP sketches) ----------
+const LOCATIONS = ['Sanur Padel', 'Liga'];
+const MATCH_TYPES = ['Regular game', 'League match', 'Other'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ---------- Storage (browser-only for the MVP) ----------
+const store = {
+  get(key, fallback) {
+    try { const v = localStorage.getItem('patchpadel.' + key); return v ? JSON.parse(v) : fallback; }
+    catch { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem('patchpadel.' + key, JSON.stringify(value)); } catch {}
+  },
+};
+
+// Demo players so the invite screens have someone to invite.
+const DEMO_PLAYERS = [
+  ['John', 'Smith', 4], ['Gavin', 'Reid', 6], ['Rahul', 'Shah', 5], ['Dave', 'Potter', 7],
+  ['Adria', 'Lopez', 3], ['Maya', 'Chen', 8], ['Tom', 'Baker', 2], ['Sofia', 'Rossi', 6],
+  ['Luca', 'Bianchi', 9], ['Nina', 'Kovac', 5], ['Omar', 'Haddad', 4], ['Ella', 'Wright', 7],
+].map(([first, last, level], i) => ({
+  id: 'demo' + i, first, last, level, location: 'Sanur', whatsapp: '', demo: true,
+}));
+
+const state = {
+  me: store.get('me', null),
+  players: store.get('players', null) || DEMO_PLAYERS,
+  matches: store.get('matches', []),
+  draft: null,      // match being created
+  invited: [],      // players invited on the last send
+};
+function savePlayers() { store.set('players', state.players); }
+
+// ---------- Helpers ----------
+const app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const opts = (list, sel) => list.map(v => `<option${v == sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+const range = (a, b) => Array.from({length: b - a + 1}, (_, i) => a + i);
+const fullName = p => `${p.first} ${p.last}`;
+const digits = s => String(s).replace(/\D/g, '');
+
+function matchDate(m) {
+  return new Date(m.year, m.month, m.day);
+}
+function describeMatch(m) {
+  const d = matchDate(m).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  return `${d}, ${m.from}–${m.to} at ${m.location} (${m.type})`;
+}
+function inviteText(m) {
+  return `Padel invite from ${fullName(state.me)}: ${describeMatch(m)}. ` +
+    `Level ${m.levelFrom}–${m.levelTo}, ${m.main} players needed` +
+    (m.reserves ? ` + ${m.reserves} reserve${m.reserves > 1 ? 's' : ''}` : '') + `. Are you in?`;
+}
+// WhatsApp click-to-chat link. Without a number, WhatsApp lets you pick the chat.
+function waLink(phone, text) {
+  const n = digits(phone);
+  return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
+}
+function eligible(m) {
+  return state.players.filter(p => p.id !== state.me.id && p.level >= m.levelFrom && p.level <= m.levelTo);
+}
+
+// ---------- Screens ----------
+const screens = {};
+
+// Player Record (registration / edit profile)
+screens.register = () => {
+  const me = state.me || { first: '', last: '', whatsapp: '', location: '', level: 5 };
+  app.innerHTML = `
+    <form class="card" id="f">
+      <p class="step">${state.me ? 'Edit profile' : 'Register'}</p>
+      <h2>Player record</h2>
+      <div class="row">
+        <div><label for="first">First name</label><input id="first" required value="${esc(me.first)}" autocomplete="given-name"></div>
+        <div><label for="last">Last name</label><input id="last" required value="${esc(me.last)}" autocomplete="family-name"></div>
+      </div>
+      <label for="wa">WhatsApp number <span class="hint">with country code, e.g. +62 812…</span></label>
+      <input id="wa" type="tel" required value="${esc(me.whatsapp)}" autocomplete="tel" placeholder="+62 812 3456 7890">
+      <label for="loc">Location</label>
+      <input id="loc" required value="${esc(me.location)}" placeholder="e.g. Sanur">
+      <label for="lvl">Level <span class="hint">1 (beginner) – 10 (pro)</span></label>
+      <select id="lvl">${opts(range(1, 10), me.level)}</select>
+      <label>Stats</label>
+      <p class="muted" style="margin:0">Coming later.</p>
+      <p class="error" id="err"></p>
+      <div class="actions">
+        ${state.me ? '<button type="button" id="cancel">Cancel</button>' : ''}
+        <button class="primary">${state.me ? 'Save' : 'Register'}</button>
+      </div>
+    </form>`;
+  const $ = id => document.getElementById(id);
+  if (state.me) $('cancel').onclick = () => go('home');
+  $('f').onsubmit = e => {
+    e.preventDefault();
+    const wa = $('wa').value.trim();
+    if (digits(wa).length < 8) { $('err').textContent = 'Please enter a valid WhatsApp number including country code.'; return; }
+    const player = {
+      id: state.me ? state.me.id : 'p' + Date.now(),
+      first: $('first').value.trim(), last: $('last').value.trim(),
+      whatsapp: wa, location: $('loc').value.trim(), level: +$('lvl').value,
+    };
+    state.me = player;
+    store.set('me', player);
+    state.players = state.players.filter(p => p.id !== player.id).concat(player);
+    savePlayers();
+    go('home');
+  };
+};
+
+// Home: create a match, see matches you've organised
+screens.home = () => {
+  const mine = state.matches.slice().sort((a, b) => matchDate(a) - matchDate(b));
+  app.innerHTML = `
+    <div class="card">
+      <h2>Hi ${esc(state.me.first)}</h2>
+      <p class="muted" style="margin:0">Level ${state.me.level} · ${esc(state.me.location)}</p>
+      <div class="actions"><button class="primary" id="create">Create padel match / event</button></div>
+    </div>
+    <div class="card">
+      <h3>Matches you've organised</h3>
+      ${mine.length ? mine.map(m => `
+        <div class="match">
+          <div><b>${esc(describeMatch(m))}</b></div>
+          <div class="muted">Level ${m.levelFrom}–${m.levelTo} · ${m.main} players + ${m.reserves} reserves · ${m.invitedIds.length} invited</div>
+        </div>`).join('') : '<p class="muted" style="margin:0">None yet.</p>'}
+    </div>`;
+  document.getElementById('create').onclick = () => { state.draft = null; go('s1'); };
+};
+
+// Screen 1: Create padel match / event
+screens.s1 = () => {
+  const now = new Date();
+  const d = state.draft || { day: now.getDate(), month: now.getMonth(), from: '08:00', to: '10:00',
+    location: LOCATIONS[0], type: MATCH_TYPES[0] };
+  app.innerHTML = `
+    <form class="card" id="f">
+      <p class="step">Step 1 of 2</p>
+      <h2>Create padel match / event</h2>
+      <label>Date / time</label>
+      <div class="row4">
+        <div><label for="day">Day</label><select id="day">${opts(range(1, 31), d.day)}</select></div>
+        <div><label for="month">Month</label><select id="month">${MONTHS.map((m, i) => `<option value="${i}"${i == d.month ? ' selected' : ''}>${m}</option>`).join('')}</select></div>
+        <div><label for="from">From</label><input id="from" type="time" step="900" required value="${d.from}"></div>
+        <div><label for="to">To</label><input id="to" type="time" step="900" required value="${d.to}"></div>
+      </div>
+      <label for="loc">Location</label>
+      <select id="loc">${opts(LOCATIONS, d.location)}</select>
+      <label for="type">Type</label>
+      <select id="type">${opts(MATCH_TYPES, d.type)}</select>
+      <p class="error" id="err"></p>
+      <div class="actions">
+        <button type="button" id="back">Cancel</button>
+        <button class="primary">Next: players</button>
+      </div>
+    </form>`;
+  const $ = id => document.getElementById(id);
+  $('back').onclick = () => go('home');
+  $('f').onsubmit = e => {
+    e.preventDefault();
+    const day = +$('day').value, month = +$('month').value;
+    // Only day + month are asked for, so use the next time that date comes round.
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let year = today.getFullYear();
+    if (new Date(year, month, day) < today) year++;
+    const date = new Date(year, month, day);
+    if (date.getMonth() !== month) { $('err').textContent = `${MONTHS[month]} doesn't have ${day} days.`; return; }
+    if ($('to').value <= $('from').value) { $('err').textContent = '"To" time must be after "From" time.'; return; }
+    state.draft = Object.assign(state.draft || { main: 4, reserves: 0, levelFrom: Math.max(1, state.me.level - 2), levelTo: Math.min(10, state.me.level + 2) }, {
+      day, month, year, from: $('from').value, to: $('to').value, location: $('loc').value, type: $('type').value,
+    });
+    go('s2');
+  };
+};
+
+// Screen 2: Players
+screens.s2 = () => {
+  const d = state.draft;
+  app.innerHTML = `
+    <form class="card" id="f">
+      <p class="step">Step 2 of 2</p>
+      <h2>Players</h2>
+      <div class="summary">${esc(describeMatch(d))}</div>
+      <label>Players required</label>
+      <div class="row">
+        <div><label for="main">Main</label><select id="main">${opts(range(1, 12), d.main)}</select></div>
+        <div><label for="res">Reserves</label><select id="res">${opts(range(0, 6), d.reserves)}</select></div>
+      </div>
+      <label>Level</label>
+      <div class="row">
+        <div><label for="lf">From</label><select id="lf">${opts(range(1, 10), d.levelFrom)}</select></div>
+        <div><label for="lt">To</label><select id="lt">${opts(range(1, 10), d.levelTo)}</select></div>
+      </div>
+      <p class="muted" id="count" style="font-size:14px"></p>
+      <p class="error" id="err"></p>
+      <label>Invite</label>
+      <div class="actions" style="margin-top:0">
+        <button type="submit" value="all" class="primary">All players</button>
+        <button type="submit" value="select" class="primary">Select players</button>
+      </div>
+      <div class="actions"><button type="button" id="back">Back</button></div>
+    </form>`;
+  const $ = id => document.getElementById(id);
+  const read = () => Object.assign(d, { main: +$('main').value, reserves: +$('res').value, levelFrom: +$('lf').value, levelTo: +$('lt').value });
+  const update = () => {
+    read();
+    $('err').textContent = d.levelFrom > d.levelTo ? 'Level "From" must be less than or equal to "To".' : '';
+    const n = eligible(d).length;
+    $('count').textContent = `${n} registered player${n === 1 ? '' : 's'} in level ${d.levelFrom}–${d.levelTo}.`;
+  };
+  ['main', 'res', 'lf', 'lt'].forEach(id => $(id).onchange = update);
+  update();
+  $('back').onclick = () => { read(); go('s1'); };
+  $('f').onsubmit = e => {
+    e.preventDefault();
+    update();
+    if (d.levelFrom > d.levelTo) return;
+    if (!eligible(d).length) { $('err').textContent = 'No players in that level range. Widen the range.'; return; }
+    go(e.submitter && e.submitter.value === 'select' ? 's4' : 's3');
+  };
+};
+
+// Screen 3: Send invite to all players?
+screens.s3 = () => {
+  const list = eligible(state.draft);
+  app.innerHTML = `
+    <div class="card center">
+      <h2>Send invite to all players?</h2>
+      <p class="muted">${list.length} player${list.length === 1 ? '' : 's'} in level ${state.draft.levelFrom}–${state.draft.levelTo}.</p>
+      <div class="actions">
+        <button id="no">No</button>
+        <button id="yes" class="primary">Yes</button>
+      </div>
+    </div>`;
+  document.getElementById('no').onclick = () => go('s2');
+  document.getElementById('yes').onclick = () => send(list);
+};
+
+// Screen 4: Player list
+screens.s4 = () => {
+  const list = eligible(state.draft).sort((a, b) => fullName(a).localeCompare(fullName(b)));
+  const chosen = new Set();
+  app.innerHTML = `
+    <div class="card">
+      <h2>Player list</h2>
+      <label class="selectall"><input type="checkbox" id="all"> Select all</label>
+      <div class="players" id="list">
+        ${list.map(p => `<label data-id="${p.id}"><input type="checkbox" value="${p.id}">${esc(fullName(p))}<span class="lvl">L${p.level}</span></label>`).join('')}
+      </div>
+      <p class="error" id="err"></p>
+      <div class="actions">
+        <button id="back">Back</button>
+        <button id="send" class="primary">Send invite (0)</button>
+      </div>
+    </div>`;
+  const $ = id => document.getElementById(id);
+  const boxes = [...app.querySelectorAll('#list input')];
+  const refresh = () => {
+    boxes.forEach(b => { b.checked = chosen.has(b.value); b.parentElement.classList.toggle('on', b.checked); });
+    $('all').checked = chosen.size === boxes.length;
+    $('send').textContent = `Send invite (${chosen.size})`;
+  };
+  boxes.forEach(b => b.onchange = () => { b.checked ? chosen.add(b.value) : chosen.delete(b.value); refresh(); });
+  $('all').onchange = () => { boxes.forEach(b => $('all').checked ? chosen.add(b.value) : chosen.delete(b.value)); refresh(); };
+  $('back').onclick = () => go('s2');
+  $('send').onclick = () => {
+    if (!chosen.size) { $('err').textContent = 'Select at least one player.'; return; }
+    send(list.filter(p => chosen.has(p.id)));
+  };
+};
+
+function send(players) {
+  const m = Object.assign({ id: 'm' + Date.now(), organiser: state.me.id, invitedIds: players.map(p => p.id) }, state.draft);
+  state.matches.push(m);
+  store.set('matches', state.matches);
+  state.invited = players;
+  state.lastMatch = m;
+  go('s5');
+}
+
+// Screen 5: Invite sent!
+screens.s5 = () => {
+  const m = state.lastMatch;
+  const text = inviteText(m);
+  app.innerHTML = `
+    <div class="card">
+      <div class="big">✅</div>
+      <h2 class="center">Invite sent!</h2>
+      <div class="summary">${esc(describeMatch(m))}</div>
+      <p class="muted" style="font-size:14px">This MVP has no messaging server yet, so each invite opens in WhatsApp for you to send.</p>
+      <ul class="invites">
+        ${state.invited.map(p => `<li><span>${esc(fullName(p))}</span>${
+          p.whatsapp ? `<a href="${waLink(p.whatsapp, text)}" target="_blank" rel="noopener">Send on WhatsApp ↗</a>`
+                     : '<span class="muted" style="font-size:13px">Demo player, no number</span>'}</li>`).join('')}
+      </ul>
+      <div class="actions">
+        <button id="copy">Copy invite text</button>
+        <button id="home" class="primary">Done</button>
+      </div>
+    </div>`;
+  document.getElementById('home').onclick = () => go('home');
+  document.getElementById('copy').onclick = e => {
+    navigator.clipboard.writeText(text).then(() => e.target.textContent = 'Copied', () => e.target.textContent = 'Copy failed');
+  };
+};
+
+// ---------- Router ----------
+function go(name) {
+  if (!state.me) name = 'register';
+  document.getElementById('btnProfile').hidden = !state.me || name === 'register';
+  screens[name]();
+  window.scrollTo(0, 0);
+}
+document.getElementById('btnProfile').onclick = () => go('register');
+go(state.me ? 'home' : 'register');
+</script>
+</body>
+</html>
