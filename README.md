@@ -1,6 +1,6 @@
-# Saunton Sands 3D
+# Hang Eleven
 
-A 3D surf view of Saunton Sands, Croyde, Putsborough and Woolacombe in North Devon. It is built on real elevation, satellite imagery and land-cover data, with a live swell, wind and tide forecast. `index.html` plus the `data/` folder is the whole app, built on three.js with no build step.
+Hang Eleven is a 3D surf view of Saunton Sands, Croyde, Putsborough and Woolacombe in North Devon. It is built on real elevation, satellite imagery and land-cover data, with a live swell, wind and tide forecast. `index.html` plus the `data/` folder is the whole app, built on three.js with no build step.
 
 ## What it shows
 
