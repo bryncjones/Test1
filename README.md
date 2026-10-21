@@ -18,6 +18,15 @@ Hang Eleven is a 3D surf view of Saunton Sands, Croyde, Putsborough and Woolacom
 - **Light:** the real sun position for the chosen day and hour, plus a sky with clouds that drives the water reflections and haze.
 - **Views:** Whole area, Saunton Sands, On the beach, In the line-up, Saunton Down and From above.
 
+## As an app
+
+- **Favourites:** star a spot to keep it at the top of the list and outlined on the map. Tap a spot's name or label to fly there.
+- **Works offline:** a service worker (`sw.js`) caches the page, survey data, icons and the three.js library. The last forecast is saved on the device and shown, with its time, when there's no signal.
+- **Install:** `manifest.webmanifest` and `icons/` let browsers add it to the home screen. Android shows an Install button. On iPhone and iPad the panel explains Share → Add to Home Screen.
+- **Privacy:** `privacy.html` says what's stored and sent. Store listings need a public URL for it.
+
+Offline support and install need the page served over `https` or from `localhost`. When the three.js version changes, update it in both the import map in `index.html` and `sw.js`, and bump `CACHE` in `sw.js` whenever cached files change.
+
 ## Run it
 
 ```sh

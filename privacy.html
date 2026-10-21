@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hang Eleven Privacy</title>
+<meta name="theme-color" content="#0b1820">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;600&display=swap">
+<style>
+/* Layout: one readable column, same palette as the app. */
+:root {
+  --ground: #0b1820;
+  --ink: #eaf2f1;
+  --muted: #9cb4b6;
+  --line: rgba(234, 242, 241, 0.14);
+  --focus: #7fd3d0;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 17px/1.6 var(--font-body);
+}
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding-inline: 16px;
+  padding-block: calc(env(safe-area-inset-top, 0px) + 32px) calc(env(safe-area-inset-bottom, 0px) + 48px);
+}
+h1 { margin: 0 0 4px; font: 700 2.2rem/1.05 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; text-wrap: balance; }
+h2 { margin: 32px 0 8px; font: 600 1.05rem/1.2 var(--font-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+p, li { margin: 0 0 12px; }
+ul { padding-left: 1.2em; margin: 0 0 12px; }
+.lede { color: var(--muted); }
+a { color: var(--focus); }
+a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.back { display: inline-block; margin-bottom: 24px; }
+.updated { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="./">← Back to Hang Eleven</a>
+  <h1>Privacy</h1>
+  <p class="lede">Hang Eleven has no accounts, no analytics and no ads, and it doesn't ask for your location.</p>
+
+  <h2>Saved on your device</h2>
+  <p>These stay in your browser's local storage, on this device only. Hang Eleven never sends them anywhere.</p>
+  <ul>
+    <li>The spots you mark as favourites.</li>
+    <li>The last forecast downloaded, so it still shows when you're offline. It is replaced each time a new one loads.</li>
+    <li>A Mapbox or MapTiler key, only if you enter one and leave "Remember on this device" ticked.</li>
+  </ul>
+  <p>To remove them, clear this site's data in your browser settings, or delete the app from your home screen.</p>
+
+  <h2>What the app requests from other services</h2>
+  <ul>
+    <li><strong>Forecast:</strong> Open-Meteo, for two fixed points off and on the Saunton coast. Your own location isn't included. Like any web server, Open-Meteo receives your IP address with each request.</li>
+    <li><strong>Code and fonts:</strong> the three.js 3D library from the jsDelivr CDN, and typefaces from Google Fonts. These services also receive your IP address.</li>
+    <li><strong>Sharper imagery (optional):</strong> if you add a key, map tiles come from the provider you choose (Mapbox or MapTiler), with your key attached.</li>
+  </ul>
+  <p>Each of these services handles requests under its own privacy policy.</p>
+
+  <h2>Questions</h2>
+  <p>Contact the developer through the app's store listing.</p>
+
+  <p class="updated">Last updated 21 October 2026.</p>
+</main>
+</body>
+</html>

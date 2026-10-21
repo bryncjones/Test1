@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hang Eleven</title>
+<meta name="description" content="3D surf view of Saunton Sands, Croyde, Putsborough and Woolacombe with a refracted swell forecast.">
+<meta name="theme-color" content="#0b1820">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hang Eleven">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -66,6 +75,8 @@ body {
   will-change: transform;
 }
 .spot-label .tag {
+  pointer-events: auto;
+  cursor: pointer;
   padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -74,6 +85,7 @@ body {
   white-space: nowrap;
 }
 .spot-label .tag b { font-family: var(--font-data); font-weight: 500; color: var(--accent); margin-left: 6px; }
+.spot-label[data-fav="true"] .tag { border-color: var(--accent); }
 .spot-label .stem { width: 1px; height: 22px; background: var(--ink); opacity: 0.7; }
 
 .panel {
@@ -165,9 +177,37 @@ body {
 .tide-times { display: flex; justify-content: space-between; gap: 8px; font: 0.72rem/1.2 var(--font-data); color: var(--muted); }
 
 .spots { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.spots li { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) auto; align-items: center; gap: 10px; }
-.spots .name { font-weight: 600; font-size: 0.92rem; min-width: 0; }
-.spots .wind { grid-column: 1 / -1; margin-top: -4px; font-size: 0.75rem; color: var(--muted); }
+.spots li { display: grid; grid-template-columns: auto 8.6em minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.fav {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.fav[aria-pressed="true"] { color: var(--accent); }
+.fav:hover { background: rgba(234, 242, 241, 0.1); }
+.spots .name {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 600 0.92rem/1.2 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+}
+.spots .name:hover { text-decoration-color: var(--muted); }
+.spots .wind { grid-column: 2 / -1; margin-top: -6px; font-size: 0.75rem; color: var(--muted); }
 .spots .wind[data-rel="offshore"], .spots .wind[data-rel="cross-offshore"], .spots .wind[data-rel="glassy"] { color: var(--good); }
 .spots .wind[data-rel="onshore"], .spots .wind[data-rel="cross-onshore"] { color: var(--poor); }
 .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
@@ -220,6 +260,8 @@ details.sect select, details.sect input[type="password"] {
 #satStatus[data-tone="error"] { color: var(--danger); }
 #satStatus[data-tone="ok"] { color: var(--focus); }
 .credits { font: 0.72rem/1.4 var(--font-data); color: var(--muted); }
+.panel a { color: var(--focus); }
+.install { display: grid; gap: 8px; }
 
 .foot {
   position: fixed;
@@ -307,6 +349,7 @@ details.sect select, details.sect input[type="password"] {
 
     <section aria-labelledby="brkLabel">
       <p class="group-label" id="brkLabel">Breaking height in the model</p>
+      <p class="note" style="margin: -2px 0 8px">Tap ☆ to keep a spot at the top. Tap a name to fly there.</p>
       <ul class="spots" id="spots"></ul>
       <p class="note">This model's own height where waves break at each spot, from the swell, period and tide over the seabed. It isn't tuned like a surf forecast, so the numbers can differ.</p>
     </section>
@@ -353,6 +396,12 @@ details.sect select, details.sect input[type="password"] {
       </div>
     </section>
 
+    <section class="install" id="installSect" aria-labelledby="installLabel" hidden>
+      <p class="group-label" id="installLabel">Get the app</p>
+      <button class="btn primary" id="installBtn" hidden>Install Hang Eleven</button>
+      <p class="note" id="installHint"></p>
+    </section>
+
     <details class="sect" id="satDetails">
       <summary>Sharper imagery</summary>
       <div class="sect-body">
@@ -380,6 +429,7 @@ details.sect select, details.sect input[type="password"] {
         <p><strong>Seabed:</strong> a smooth shoreface with two sandbars on sandy coast (steeper off rock), blended over the first 0.6–1.8 km into the coarse depths in AWS Terrain Tiles. The inner surf zone is therefore approximate.</p>
         <p><strong>Waves:</strong> the forecast's main swell is traced across that seabed by solving for its crest pattern, so it turns towards shallow water, grows as it slows and breaks at 0.78 of the depth. A second swell, when forecast, is added by energy to the breaking heights but not drawn. There is no diffraction, wind or current, so the lee of a headland comes out quieter than it really is.</p>
         <p><strong>Forecast:</strong> Open-Meteo marine and weather models at a point offshore. Its sea level includes the tide but is less reliable near coasts.</p>
+        <p><a href="privacy.html">Privacy</a>: no accounts, no tracking. Favourites and the last forecast are saved only on this device.</p>
         <p class="credits" id="credits">Contains modified Copernicus Sentinel data 2023. Copernicus DEM GLO-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA. ESA WorldCover 2021 © ESA, CC BY 4.0. Bathymetry from AWS Terrain Tiles (Tilezen). Forecast data by Open-Meteo.com, CC BY 4.0.</p>
       </div>
     </details>
@@ -1379,24 +1429,65 @@ function windRelation(spot) {
   return d < 40 ? 'onshore' : d < 80 ? 'cross-onshore' : d < 110 ? 'cross-shore' : d < 145 ? 'cross-offshore' : 'offshore';
 }
 
+// Favourite spots live only in this browser
+const FAV_KEY = 'hang11.favourites';
+function loadFavourites() {
+  try { return new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]')); } catch { return new Set(); }
+}
+const favourites = loadFavourites();
+function toggleFavourite(name) {
+  favourites.has(name) ? favourites.delete(name) : favourites.add(name);
+  try { localStorage.setItem(FAV_KEY, JSON.stringify([...favourites])); } catch { /* storage unavailable */ }
+  renderSpots();
+}
+
 function updateSpots() {
-  const list = document.getElementById('spots');
-  const rows = state.spots.map(s => {
+  for (const s of state.spots) {
     const h1 = breakingAt(state.field, state.H0, state.T, s);
     const h2 = state.sec ? breakingAt(state.field2, state.sec.H, state.sec.T, s) : 0;
     s.breaking = Math.sqrt(h1 * h1 + h2 * h2);
-    return s;
-  });
+  }
+  renderSpots();
+}
+
+function renderSpots() {
+  const list = document.getElementById('spots');
+  const rows = state.spots.slice().sort((a, b) => (favourites.has(b.name) - favourites.has(a.name)));
   const max = Math.max(2, ...rows.map(s => s.breaking));
   list.replaceChildren(...rows.map(s => {
     const li = document.createElement('li');
     const rel = windRelation(s);
-    li.innerHTML = `<span class="name"></span><span class="bar"><span style="width:${(s.breaking / max * 100).toFixed(0)}%"></span></span><span class="val">${s.breaking.toFixed(1)} m · ${(s.breaking * FT).toFixed(1)} ft</span>` +
+    const fav = favourites.has(s.name);
+    li.innerHTML = `<button class="fav" aria-pressed="${fav}"></button><button class="name"></button><span class="bar"><span style="width:${(s.breaking / max * 100).toFixed(0)}%"></span></span><span class="val">${s.breaking.toFixed(1)} m · ${(s.breaking * FT).toFixed(1)} ft</span>` +
       (rel ? `<span class="wind" data-rel="${rel}">${rel} · beach faces ${compass(s.facing)}</span>` : '');
-    li.querySelector('.name').textContent = s.name;
+    const favBtn = li.querySelector('.fav');
+    favBtn.textContent = fav ? '★' : '☆';
+    favBtn.setAttribute('aria-label', fav ? `Remove ${s.name} from favourites` : `Add ${s.name} to favourites`);
+    favBtn.addEventListener('click', () => toggleFavourite(s.name));
+    const nameBtn = li.querySelector('.name');
+    nameBtn.textContent = s.name;
+    nameBtn.setAttribute('aria-label', `Fly to ${s.name}`);
+    nameBtn.addEventListener('click', () => flyToSpot(s));
     return li;
   }));
-  for (const s of state.spots) if (s.labelVal) s.labelVal.textContent = `${s.breaking.toFixed(1)} m`;
+  for (const s of state.spots) {
+    if (s.labelVal) s.labelVal.textContent = `${s.breaking.toFixed(1)} m`;
+    if (s.el) s.el.dataset.fav = String(favourites.has(s.name));
+    if (s.labelName) s.labelName.textContent = (favourites.has(s.name) ? '★ ' : '') + s.name;
+  }
+}
+
+// An oblique view from the water, a little along the beach, looking in at the spot
+function flyToSpot(s) {
+  const f = s.facing * Math.PI / 180;
+  const out = new THREE.Vector3(Math.sin(f), 0, -Math.cos(f));       // towards the sea
+  const along = new THREE.Vector3(-out.z, 0, out.x);                  // along the shore
+  const tgt = new THREE.Vector3(s.x, Math.max(groundAt(s.x, s.z), state.tide), s.z);
+  const pos = tgt.clone().addScaledVector(out, 950).addScaledVector(along, 650);
+  pos.y = state.tide + 260;
+  state.view = 'spot';
+  document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+  flyTo(pos, tgt);
 }
 
 // Direction each beach faces, from where the sea lies around it.
@@ -1417,7 +1508,9 @@ function initSpots() {
     el.innerHTML = '<div class="tag"><span></span><b></b></div><div class="stem"></div>';
     el.querySelector('span').textContent = sp.name;
     labels.appendChild(el);
-    return { name: sp.name, x: p.x, z: p.z, facing, breaking: 0, el, labelVal: el.querySelector('b') };
+    const spot = { name: sp.name, x: p.x, z: p.z, facing, breaking: 0, el, labelVal: el.querySelector('b'), labelName: el.querySelector('span') };
+    el.querySelector('.tag').addEventListener('click', () => flyToSpot(spot));
+    return spot;
   });
 }
 
@@ -1438,6 +1531,7 @@ function updateLabels() {
 // ---------------------------------------------------------------------------
 const FC_SEA = { lat: 51.12, lon: -4.40 };   // open water west of Saunton
 const FC_LAND = { lat: 51.11, lon: -4.22 };
+const FC_KEY = 'hang11.forecast';
 async function loadForecast() {
   const status = document.getElementById('fcStatus');
   const marineVars = 'wave_height,swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,secondary_swell_wave_period,secondary_swell_wave_direction,wind_wave_height,sea_level_height_msl';
@@ -1445,42 +1539,64 @@ async function loadForecast() {
   const wUrl = `https://api.open-meteo.com/v1/forecast?latitude=${FC_LAND.lat}&longitude=${FC_LAND.lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=mph&timezone=Europe%2FLondon&forecast_days=7`;
   try {
     const [m, w] = await Promise.all([fetch(mUrl), fetch(wUrl)].map(p => p.then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })));
-    const t = m.hourly.time;
-    const wi = new Map(w.hourly.time.map((tt, i) => [tt, i]));
-    const pick = (arr, i) => (arr && arr[i] != null ? arr[i] : null);
-    const hours = t.map((tt, i) => {
-      const j = wi.get(tt);
-      return {
-        time: tt, day: tt.slice(0, 10), hour: parseInt(tt.slice(11, 13), 10),
-        H: pick(m.hourly.swell_wave_height, i) ?? pick(m.hourly.wave_height, i),
-        T: pick(m.hourly.swell_wave_period, i), dir: pick(m.hourly.swell_wave_direction, i),
-        H2: pick(m.hourly.secondary_swell_wave_height, i), T2: pick(m.hourly.secondary_swell_wave_period, i), dir2: pick(m.hourly.secondary_swell_wave_direction, i),
-        windWave: pick(m.hourly.wind_wave_height, i), tide: pick(m.hourly.sea_level_height_msl, i),
-        wind: j != null ? pick(w.hourly.wind_speed_10m, j) : null, windDir: j != null ? pick(w.hourly.wind_direction_10m, j) : null,
-        gust: j != null ? pick(w.hourly.wind_gusts_10m, j) : null,
-      };
-    }).filter(hh => hh.H != null && hh.T != null && hh.dir != null);
-    if (!hours.length) throw new Error('empty');
-    state.forecast = hours;
-    const hasTide = hours.some(hh => hh.tide != null);
+    useForecast(m, w);
+    try { localStorage.setItem(FC_KEY, JSON.stringify({ fetchedAt: Date.now(), m, w })); } catch { /* storage full or unavailable */ }
     status.dataset.tone = '';
-    status.textContent = `Open-Meteo, for a point ${Math.abs(FC_SEA.lon).toFixed(2)}°W offshore.` + (hasTide ? '' : ' No tide in this run, so set it under Try your own swell.');
-    buildDays();
-    const nowDay = londonDayISO(new Date());
-    const nowHour = parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' }).format(new Date()), 10);
-    let idx = hours.findIndex(hh => hh.day === nowDay && hh.hour === nowHour);
-    if (idx < 0) idx = 0;
-    selectHour(idx);
+    status.textContent = `Open-Meteo, for a point ${Math.abs(FC_SEA.lon).toFixed(2)}°W offshore.` + (state.forecast.some(h => h.tide != null) ? '' : ' No tide in this run, so set it under Try your own swell.');
   } catch (e) {
+    // Offline or blocked: use the last forecast saved on this device, if it is less than a week old
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(FC_KEY) || 'null'); } catch { saved = null; }
+    if (saved && Date.now() - saved.fetchedAt < 7 * 86400000) {
+      try {
+        useForecast(saved.m, saved.w);
+        const when = new Date(saved.fetchedAt).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+        status.dataset.tone = '';
+        status.textContent = `Offline: showing the forecast saved ${when}. It updates when you're back online.`;
+        return;
+      } catch { /* saved copy unusable; fall through */ }
+    }
     state.forecast = null;
     status.dataset.tone = 'error';
-    status.textContent = "The live forecast couldn't be reached from this page (claude.ai previews block it). Open the page from GitHub Pages or a local server for the forecast; the sliders under Try your own swell still work.";
+    status.textContent = navigator.onLine === false
+      ? "You're offline and there's no saved forecast yet. The sliders under Try your own swell still work."
+      : "The live forecast couldn't be reached from this page (claude.ai previews block it). Open the page from GitHub Pages or a local server for the forecast; the sliders under Try your own swell still work.";
     document.getElementById('days').hidden = true;
     document.querySelector('.hour-row').hidden = true;
     document.getElementById('tideCurve').hidden = true;
     document.getElementById('tideTimes').hidden = true;
     document.getElementById('ownSwell').open = true;
   }
+}
+
+function useForecast(m, w) {
+  const t = m.hourly.time;
+  const wi = new Map(w.hourly.time.map((tt, i) => [tt, i]));
+  const pick = (arr, i) => (arr && arr[i] != null ? arr[i] : null);
+  const hours = t.map((tt, i) => {
+    const j = wi.get(tt);
+    return {
+      time: tt, day: tt.slice(0, 10), hour: parseInt(tt.slice(11, 13), 10),
+      H: pick(m.hourly.swell_wave_height, i) ?? pick(m.hourly.wave_height, i),
+      T: pick(m.hourly.swell_wave_period, i), dir: pick(m.hourly.swell_wave_direction, i),
+      H2: pick(m.hourly.secondary_swell_wave_height, i), T2: pick(m.hourly.secondary_swell_wave_period, i), dir2: pick(m.hourly.secondary_swell_wave_direction, i),
+      windWave: pick(m.hourly.wind_wave_height, i), tide: pick(m.hourly.sea_level_height_msl, i),
+      wind: j != null ? pick(w.hourly.wind_speed_10m, j) : null, windDir: j != null ? pick(w.hourly.wind_direction_10m, j) : null,
+      gust: j != null ? pick(w.hourly.wind_gusts_10m, j) : null,
+    };
+  }).filter(hh => hh.H != null && hh.T != null && hh.dir != null);
+  if (!hours.length) throw new Error('empty');
+  state.forecast = hours;
+  for (const id of ['days', 'tideCurve', 'tideTimes']) document.getElementById(id).hidden = false;
+  document.querySelector('.hour-row').hidden = false;
+  buildDays();
+  // the current hour, or the nearest one the forecast covers
+  const nowDay = londonDayISO(new Date());
+  const nowHour = parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hourCycle: 'h23' }).format(new Date()), 10);
+  const nowKey = `${nowDay}T${String(nowHour).padStart(2, '0')}`;
+  let idx = hours.findIndex(hh => hh.time.slice(0, 13) >= nowKey);
+  if (idx < 0) idx = hours.length - 1;
+  selectHour(idx);
 }
 
 function buildDays() {
@@ -1496,7 +1612,8 @@ function buildDays() {
     const name = dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', timeZone: 'UTC' });
     b.innerHTML = `<span></span><span></span>`;
     b.firstChild.textContent = name;
-    b.lastChild.textContent = hs.length ? `${(lo * FT).toFixed(0)}–${(hi * FT).toFixed(0)} ft` : '–';
+    const loF = Math.round(lo * FT), hiF = Math.round(hi * FT);
+    b.lastChild.textContent = !hs.length ? '–' : loF === hiF ? `${loF} ft` : `${loF}–${hiF} ft`;
     b.setAttribute('aria-pressed', 'false');
     b.addEventListener('click', () => {
       const idx = state.forecast.findIndex(h => h.day === d && h.hour === (state.hourIndex >= 0 ? state.forecast[state.hourIndex].hour : 12));
@@ -1779,6 +1896,8 @@ async function boot() {
     try { document.getElementById('apiKey').value = localStorage.getItem('saunton.key.' + e.target.value) || ''; } catch { /* storage unavailable */ }
   });
 
+  setupInstall();
+
   const land = await loadBaked(progress);
   await installLand(land);
   updateSun();
@@ -1786,6 +1905,38 @@ async function boot() {
   loadingEl.dataset.done = 'true';
   window.__ready = true;
   loadForecast();
+}
+
+// Offline support and home-screen install. Service workers only run on https or localhost,
+// so on claude.ai previews this quietly does nothing.
+function setupInstall() {
+  const sect = document.getElementById('installSect'), btn = document.getElementById('installBtn'), hint = document.getElementById('installHint');
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if (!('serviceWorker' in navigator) || !(location.protocol === 'https:' || location.hostname === 'localhost')) return;
+  navigator.serviceWorker.register('sw.js').then(() => {
+    if (standalone) return;
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ios) {
+      hint.textContent = 'In Safari, tap Share, then Add to Home Screen. It then opens full screen and works offline.';
+      sect.hidden = false;
+    }
+  }).catch(() => { /* not available here */ });
+  let deferred = null;
+  addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferred = e;
+    btn.hidden = false;
+    hint.textContent = 'Opens full screen and works offline, with your favourites and last forecast.';
+    sect.hidden = false;
+  });
+  btn.addEventListener('click', async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    await deferred.userChoice.catch(() => null);
+    deferred = null;
+    sect.hidden = true;
+  });
+  addEventListener('appinstalled', () => { sect.hidden = true; });
 }
 
 let lastT = performance.now();
