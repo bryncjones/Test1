@@ -80,3 +80,29 @@ Run them from the same working directory. The spot coordinates in `meta.json` we
 - **Elevation datum.** Heights are relative to the EGM2008 geoid, treated as mean sea level, which may be off locally by a few tenths of a metre.
 - **No diffraction, currents or wind-wave growth.** Lees come out quieter than reality. Only the main swell is drawn.
 - **MapTiler is unverified.** Its tile URL follows its published pattern but wasn't tested here.
+
+---
+
+# What’s Up (`whatsup/`)
+
+A phone web app that uses your GPS to show what's flying above you: planes, satellites, the Sun, Moon and planets. Open `/whatsup/` on the same server.
+
+- **1 mile around me:** a map with a 1-mile radius circle (¼ and ½ mile rings). Planes inside it are drawn where they are, with altitude. Arrows on the edge point to the nearest planes outside the square. They turn yellow if their current course will take them overhead.
+- **Whole sky:** the centre is straight up and the edge is the horizon, with north at the top like the map. Shows every plane, satellite, Sun, Moon and planet above the horizon.
+- **Directly overhead:** anything within N° of straight up (10° by default, adjustable from 2° to 25°) gets a pulsing yellow ring, a banner at the top of the screen and, on Android, a vibration. Space objects that are overhead show as a ring around your own dot on the map.
+- **Heading over you:** planes predicted to pass overhead in the next 5 minutes, worked out from their current speed and heading.
+- Tap anything on either view, or in the lists, for details.
+
+Why "overhead" is an angle, not a distance: a satellite 400 km up or a planet is never within a mile of you, but it can be straight above you. So the highlight works by how close an object is to straight up. Planes are also listed by ground distance inside the mile.
+
+Data:
+- Aircraft: adsb.lol, falling back to airplanes.live, adsb.fi and then OpenSky. They're polled every 5 seconds (15 for OpenSky) within 25 nautical miles, and positions are extrapolated between updates.
+- Satellites: the CelesTrak "active" list, cached on the device for 6 hours, with orbits computed on the phone by satellite.js.
+- Sun, Moon and planets: computed on the phone by Astronomy Engine.
+- Map: OpenStreetMap tiles via Leaflet.
+
+The libraries are vendored in `whatsup/lib/` (see `LICENSES.txt`), so there is no build step.
+
+Add `?preview` to the address (`/whatsup/?preview`) to run it with simulated planes and satellites at a spot under the Heathrow approach, with no GPS or live data needed. A plane crosses directly overhead about 10 seconds after you start.
+
+GPS only works over `https` or on `localhost`, so use GitHub Pages or another https host to try it on a phone. The root `sw.js` passes these data services through uncached so they never show stale positions.
