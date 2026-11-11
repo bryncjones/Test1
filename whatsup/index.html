@@ -7,7 +7,7 @@
 <meta name="color-scheme" content="dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Overhead</title>
+<title>WhatsUp</title>
 <link rel="stylesheet" href="lib/leaflet.css">
 <style>
   :root {
@@ -88,7 +88,7 @@
 </head>
 <body>
 <header>
-  <h1>Over<span>head</span></h1>
+  <h1>Whats<span>Up</span></h1>
   <div id="gps" class="pill">No location yet</div>
 </header>
 <div id="alert" class="alert" hidden role="status" aria-live="assertive"></div>
@@ -96,7 +96,7 @@
 <main>
   <section id="start" class="card">
     <h2>What's right above me?</h2>
-    <p>Overhead finds you with your phone's GPS and shows the planes, satellites and planets above you. The map covers a 1-mile radius around you, and anything directly over your head lights up yellow.</p>
+    <p>WhatsUp finds you with your phone's GPS and shows the planes, satellites and planets above you. The map covers a 1-mile radius around you, and anything directly over your head lights up yellow.</p>
     <button id="go" class="primary">Find my location</button>
     <button id="demo" class="ghost">No GPS? Try it under the Heathrow flight path</button>
     <p id="startMsg" class="muted small" style="margin:12px 0 0"></p>
@@ -157,7 +157,7 @@ const S = {
   selected: null, hits: [],
   map: null, wake: null,
 };
-try { const c = +localStorage.getItem('overhead.cone'); if (c >= 2 && c <= 25) S.cone = c; } catch (e) {}
+try { const c = +localStorage.getItem('whatsup.cone'); if (c >= 2 && c <= 25) S.cone = c; } catch (e) {}
 
 /* ---------- helpers ---------- */
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -307,11 +307,11 @@ const TLE_URLS = [
   ['bright satellites', 'https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle'],
 ];
 async function cacheGet() {
-  try { const c = await caches.open('overhead-tle'); const r = await c.match('tle'); if (!r) return null;
+  try { const c = await caches.open('whatsup-tle'); const r = await c.match('tle'); if (!r) return null;
     return { text: await r.text(), time: +r.headers.get('x-time'), label: r.headers.get('x-label') }; } catch (e) { return null; }
 }
 async function cachePut(text, label) {
-  try { const c = await caches.open('overhead-tle'); await c.put('tle', new Response(text, { headers: { 'x-time': String(Date.now()), 'x-label': label } })); } catch (e) {}
+  try { const c = await caches.open('whatsup-tle'); await c.put('tle', new Response(text, { headers: { 'x-time': String(Date.now()), 'x-label': label } })); } catch (e) {}
 }
 async function loadSats() {
   const cached = await cacheGet();
@@ -657,7 +657,7 @@ function setTab(t) {
 $('tabMile').onclick = () => setTab('mile');
 $('tabSky').onclick = () => setTab('sky');
 $('cone').value = S.cone; $('coneVal').textContent = S.cone + '°';
-$('cone').oninput = (e) => { S.cone = +e.target.value; $('coneVal').textContent = S.cone + '°'; try { localStorage.setItem('overhead.cone', S.cone); } catch (err) {} };
+$('cone').oninput = (e) => { S.cone = +e.target.value; $('coneVal').textContent = S.cone + '°'; try { localStorage.setItem('whatsup.cone', S.cone); } catch (err) {} };
 async function keepAwake() {
   try { if ('wakeLock' in navigator && !document.hidden) S.wake = await navigator.wakeLock.request('screen'); } catch (e) {}
 }

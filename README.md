@@ -83,9 +83,9 @@ Run them from the same working directory. The spot coordinates in `meta.json` we
 
 ---
 
-# Overhead (`overhead/`)
+# WhatsUp (`whatsup/`)
 
-A phone web app that uses your GPS to show what's flying above you: planes, satellites, the Sun, Moon and planets. Open `/overhead/` on the same server.
+A phone web app that uses your GPS to show what's flying above you: planes, satellites, the Sun, Moon and planets. Open `/whatsup/` on the same server.
 
 - **1 mile around me:** a map with a 1-mile radius circle (¼ and ½ mile rings). Planes inside it are drawn where they are, with altitude. Arrows on the edge point to the nearest planes outside the square. They turn yellow if their current course will take them overhead.
 - **Whole sky:** the centre is straight up and the edge is the horizon, with north at the top like the map. Shows every plane, satellite, Sun, Moon and planet above the horizon.
@@ -101,6 +101,6 @@ Data:
 - Sun, Moon and planets: computed on the phone by Astronomy Engine.
 - Map: OpenStreetMap tiles via Leaflet.
 
-The libraries are vendored in `overhead/lib/` (see `LICENSES.txt`), so there is no build step.
+The libraries are vendored in `whatsup/lib/` (see `LICENSES.txt`), so there is no build step.
 
 GPS only works over `https` or on `localhost`, so use GitHub Pages or another https host to try it on a phone. The root `sw.js` passes these data services through uncached so they never show stale positions.
