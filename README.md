@@ -83,7 +83,7 @@ Run them from the same working directory. The spot coordinates in `meta.json` we
 
 ---
 
-# WhatsUp (`whatsup/`)
+# What’sUp (`whatsup/`)
 
 A phone web app that uses your GPS to show what's flying above you: planes, satellites, the Sun, Moon and planets. Open `/whatsup/` on the same server.
 
