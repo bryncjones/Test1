@@ -231,7 +231,7 @@ function launch() {
 function initMap() {
   S.map = L.map('map', { zoomControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false,
     boxZoom: false, keyboard: false, zoomSnap: 0, attributionControl: true, fadeAnimation: false });
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(S.map);
+  if (!PREVIEW) L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(S.map);
   fitMap();
   new ResizeObserver(() => { S.map.invalidateSize(false); fitMap(); }).observe($('mileView'));
 }
@@ -272,8 +272,48 @@ const AC_SOURCES = [
       }));
     } },
 ];
+
+/* ---------- preview mode: simulated traffic, for places that can't use GPS or live data ---------- */
+// On with window.WHATSUP_PREVIEW (set by the claude.ai preview build) or ?preview in the address.
+const PREVIEW = !!window.WHATSUP_PREVIEW || new URLSearchParams(location.search).has('preview');
+function simAircraft(now) {
+  const o = S.obs, t = now / 1000, out = [], mLat = 1 / RE * R2D, mLon = mLat / Math.cos(o.lat * D2R);
+  const at = (e, n) => ({ lat: o.lat + n * mLat, lon: o.lon + e * mLon });
+  // arrivals flying west down a 3° glide path that passes right over the preview spot
+  const v = 145 * KT, gap = 100, thresholdE = -1600;
+  for (let i = Math.floor(t / gap) - 4; i <= Math.floor(t / gap); i++) {
+    const e = thresholdE + 28000 - v * (t - i * gap);
+    if (e < thresholdE) continue;
+    const p = at(e, 40), altFt = ((e - thresholdE) * Math.tan(3 * D2R) + 15) / FT;
+    out.push({ hex: 'sim' + (i % 1000), flight: 'SIM' + (100 + (i % 900)), t: ['A320', 'A350', 'B77W', 'A21N', 'B789'][((i % 5) + 5) % 5], ...p, alt_geom: altFt, gs: 145, track: 270, seen_pos: 0 });
+  }
+  // overflights at cruise height on straight lines; the first two cross directly overhead, the first about 10 s after the preview starts
+  const ts = t - simAircraft.start;
+  [[45, 0, 36000, 450, 150], [160, 0, 41000, 420, 210], [120, 2500, 31000, 430, 420], [200, -6000, 24000, 380, 360], [300, 9000, 39000, 470, 480], [10, -14000, 12000, 300, 330]]
+    .forEach(([trk, off, alt, kt, per], k) => {
+      const s = ((ts + per / 2 - 12 - k * 70 + per * 10) % per) - per / 2, vm = kt * KT, d = vm * s;
+      const e = d * Math.sin(trk * D2R) + off * Math.cos(trk * D2R), n = d * Math.cos(trk * D2R) - off * Math.sin(trk * D2R);
+      out.push({ hex: 'ovf' + k, flight: 'SIM' + (900 + k), t: ['B788', 'A359', 'A333', 'E190', 'B744', 'AT76'][k], ...at(e, n), alt_geom: alt, gs: kt, track: trk, seen_pos: 0 });
+    });
+  return out;
+}
+function simTle() {
+  const d = new Date(), y0 = Date.UTC(d.getUTCFullYear(), 0, 1), doy = (d - y0) / 864e5 + 1;
+  const f = (x, w, p) => x.toFixed(p).padStart(w, ' ');
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const lines = [];
+  for (let i = 0; i < 300; i++) {
+    const id = String(90000 + i).slice(-5), inc = i === 0 ? 51.64 : 40 + rnd() * 58, raan = rnd() * 360, ma = rnd() * 360, mm = i === 0 ? 15.5 : 14.2 + rnd() * 1.4;
+    const l1 = `1 ${id}U 26001A   ${String(d.getUTCFullYear() % 100).padStart(2, '0')}${f(doy, 12, 8).replace(/ /g, '0')}  .00000000  00000-0  00000-0 0  9990`;
+    const l2 = `2 ${id} ${f(inc, 8, 4)} ${f(raan, 8, 4)} 0001000 ${f(90, 8, 4)} ${f(ma, 8, 4)} ${f(mm, 11, 8)}000010`;
+    lines.push(i === 0 ? 'SPACE STATION (simulated)' : `SIM-SAT ${i}`, l1, l2);
+  }
+  return lines.join('\n');
+}
+
 let acIdx = 0;
 async function pollAircraft() {
+  if (PREVIEW) { simAircraft.start ??= Date.now() / 1000; S.aircraft = readsb(simAircraft(Date.now())); S.acSource = 'simulated traffic (preview)'; S.acTime = Date.now(); setTimeout(pollAircraft, 2000); return; }
   const la = S.obs.lat.toFixed(3), lo = S.obs.lon.toFixed(3);   // ~100 m rounding: plenty for a 25 nm search
   for (let tried = 0; tried < AC_SOURCES.length; tried++) {
     const src = AC_SOURCES[acIdx];
@@ -314,6 +354,7 @@ async function cachePut(text, label) {
   try { const c = await caches.open('whatsup-tle'); await c.put('tle', new Response(text, { headers: { 'x-time': String(Date.now()), 'x-label': label } })); } catch (e) {}
 }
 async function loadSats() {
+  if (PREVIEW) return useTle(simTle(), 'simulated satellites (preview)', Date.now());
   const cached = await cacheGet();
   if (cached && Date.now() - cached.time < SAT_CACHE_HOURS * 3600e3) return useTle(cached.text, cached.label, cached.time);
   for (const [label, url] of TLE_URLS) {
@@ -333,7 +374,7 @@ function useTle(text, label, time) {
     } else i++;
   }
   S.sats = out; S.satTime = time; S.satScan = 0; S.satSwept = false;
-  S.satStatus = `Satellites: ${fmtInt(out.length)} ${label} from CelesTrak (orbits downloaded ${fmtAgo(time)})`;
+  S.satStatus = PREVIEW ? `Satellites: ${fmtInt(out.length)} ${label}` : `Satellites: ${fmtInt(out.length)} ${label} from CelesTrak (orbits downloaded ${fmtAgo(time)})`;
 }
 function satUpdate(s, date, gmst, obsGd) {
   const pv = satellite.propagate(s.rec, date);
@@ -557,10 +598,14 @@ function drawMile(t) {
     hits.push({ x, y, o });
   }
   // edge arrows for the nearest planes outside the square, so you can see what's coming
-  offscreen.sort((a, b) => a.ground - b.ground).slice(0, 6).forEach((o) => {
+  const placed = [];
+  offscreen.sort((a, b) => a.ground - b.ground).forEach((o) => {
+    if (placed.length >= 6) return;
     const ang = Math.atan2(o.e, o.n), sx = Math.sin(ang), sy = -Math.cos(ang);
     const k = Math.min((w / 2 - 22) / Math.abs(sx || 1e-9), (h / 2 - 22) / Math.abs(sy || 1e-9));
     const x = cx + sx * k, y = cy + sy * k, hot = o.eta != null;
+    if (placed.some(([px, py]) => Math.hypot(px - x, py - y) < 44)) return;   // don't stack arrows; the nearest plane in that direction wins
+    placed.push([x, y]);
     ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
     ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(7, 5); ctx.lineTo(-7, 5); ctx.closePath();
     ctx.fillStyle = hot ? COLORS.hot : 'rgba(127,211,255,.85)'; ctx.fill(); ctx.restore();
@@ -678,6 +723,11 @@ function frame(t) {
 }
 
 $('go').onclick = startGps;
+if (PREVIEW) {
+  $('go').hidden = true;
+  $('demo').className = 'primary'; $('demo').textContent = 'Start the preview';
+  $('startMsg').textContent = 'This is a preview with simulated planes and satellites at a spot under the Heathrow approach. The Sun, Moon and planets are real for that spot right now. The full app uses your GPS and live flight data.';
+}
 $('demo').onclick = () => setObs(51.4700, -0.4100, 25, 0, 'near Heathrow (Hatton Cross)');
 </script>
 </body>

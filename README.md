@@ -103,4 +103,6 @@ Data:
 
 The libraries are vendored in `whatsup/lib/` (see `LICENSES.txt`), so there is no build step.
 
+Add `?preview` to the address (`/whatsup/?preview`) to run it with simulated planes and satellites at a spot under the Heathrow approach, with no GPS or live data needed. A plane crosses directly overhead about 10 seconds after you start.
+
 GPS only works over `https` or on `localhost`, so use GitHub Pages or another https host to try it on a phone. The root `sw.js` passes these data services through uncached so they never show stale positions.
