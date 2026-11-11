@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#060912">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Overhead</title>
+<link rel="stylesheet" href="lib/leaflet.css">
+<style>
+  :root {
+    --bg: #060912; --card: #0e1424; --card2: #141c31; --ink: #e9eefb; --muted: #8e9ab8; --line: #222c47;
+    --plane: #7fd3ff; --sat: #c6b8ff; --body: #ffd479; --you: #3d8bff;
+    --hot: #ffcf3a; --hot-ink: #1d1500; --ok: #5be38f; --bad: #ff7a7a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    max-width: 640px; margin: 0 auto; padding: 14px 16px 10px; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+  h1 span { color: var(--hot); }
+  .pill { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+  .pill.live { color: var(--ok); border-color: #1f4a33; }
+  main { max-width: 640px; margin: 0 auto; padding: 0 16px 40px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin: 8px 0 16px; }
+  .card h2 { margin: 0 0 8px; font-size: 22px; }
+  .card p { margin: 0 0 14px; color: #c3cbe0; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .primary { display: block; width: 100%; padding: 14px; border: 0; border-radius: 12px; font-weight: 650;
+    background: var(--hot); color: var(--hot-ink); font-size: 16px; }
+  .ghost { display: block; width: 100%; padding: 12px; margin-top: 10px; border: 1px solid var(--line);
+    border-radius: 12px; background: transparent; color: var(--muted); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12.5px; }
+
+  .alert { position: sticky; top: 0; z-index: 1000; max-width: 640px; margin: 0 auto 8px; padding: 12px 16px;
+    background: var(--hot); color: var(--hot-ink); font-weight: 650; border-radius: 0 0 14px 14px;
+    box-shadow: 0 6px 30px rgba(255, 207, 58, .35); animation: glow 1.2s ease-in-out infinite alternate; }
+  .alert small { display: block; font-weight: 500; opacity: .85; }
+  @keyframes glow { from { box-shadow: 0 4px 16px rgba(255,207,58,.25); } to { box-shadow: 0 6px 36px rgba(255,207,58,.6); } }
+
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 4px; margin-bottom: 10px; }
+  .tabs button { border: 0; background: transparent; padding: 9px 6px; border-radius: 9px; color: var(--muted); font-weight: 600; }
+  .tabs button[aria-selected="true"] { background: var(--card2); color: var(--ink); }
+
+  .stage { position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: 18px; overflow: hidden;
+    border: 1px solid var(--line); background: #0a0f1d; }
+  .view { position: absolute; inset: 0; }
+  .view[hidden] { display: none; }
+  #map { position: absolute; inset: 0; background: #0a0f1d; }
+  #map .leaflet-tile-pane { filter: invert(1) hue-rotate(195deg) brightness(.75) contrast(.9) saturate(.5); }
+  .leaflet-container .leaflet-control-attribution { background: rgba(6,9,18,.7); color: var(--muted); font-size: 10px; }
+  .leaflet-container .leaflet-control-attribution a { color: #b0bce0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: manipulation; }
+  #mileCanvas { z-index: 500; }
+
+  .info { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 600; background: rgba(14,20,36,.94);
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; backdrop-filter: blur(6px); }
+  .info b { font-size: 15px; }
+  .info .x { position: absolute; top: 4px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 20px; padding: 2px 8px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 2px; font-size: 12.5px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  .slider { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 10px 0 16px; }
+  .slider label { display: block; font-size: 13.5px; color: #c3cbe0; margin-bottom: 4px; }
+  .slider input { width: 100%; accent-color: var(--hot); }
+
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 18px 2px 6px; }
+  h3.hot { color: var(--hot); }
+  ul.objs { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  ul.objs li { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--line); cursor: pointer; }
+  ul.objs li:first-child { border-top: 0; }
+  ul.objs li.hot { background: rgba(255, 207, 58, .12); }
+  ul.objs .ic { width: 22px; text-align: center; font-size: 16px; flex: none; }
+  ul.objs .nm { font-weight: 600; }
+  ul.objs .dt { color: var(--muted); font-size: 12.5px; }
+  ul.objs .rt { margin-left: auto; text-align: right; font-size: 12.5px; color: #c3cbe0; white-space: nowrap; }
+  .empty { padding: 10px 12px; color: var(--muted); font-size: 13.5px; background: var(--card); border: 1px dashed var(--line); border-radius: 12px; }
+  footer { max-width: 640px; margin: 0 auto; padding: 0 16px 32px; color: var(--muted); font-size: 12px; }
+  footer a { color: #b0bce0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Over<span>head</span></h1>
+  <div id="gps" class="pill">No location yet</div>
+</header>
+<div id="alert" class="alert" hidden role="status" aria-live="assertive"></div>
+
+<main>
+  <section id="start" class="card">
+    <h2>What's right above me?</h2>
+    <p>Overhead finds you with your phone's GPS and shows the planes, satellites and planets above you. The map covers a 1-mile radius around you, and anything directly over your head lights up yellow.</p>
+    <button id="go" class="primary">Find my location</button>
+    <button id="demo" class="ghost">No GPS? Try it under the Heathrow flight path</button>
+    <p id="startMsg" class="muted small" style="margin:12px 0 0"></p>
+  </section>
+
+  <section id="app" hidden>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabMile" aria-selected="true">1 mile around me</button>
+      <button role="tab" id="tabSky" aria-selected="false">Whole sky</button>
+    </div>
+    <div class="stage">
+      <div id="mileView" class="view"><div id="map"></div><canvas id="mileCanvas" aria-label="Map of the mile around you"></canvas></div>
+      <div id="skyView" class="view" hidden><canvas id="skyCanvas" aria-label="Sky chart: centre is straight up, edge is the horizon"></canvas></div>
+      <div id="info" class="info" hidden></div>
+    </div>
+    <div class="legend" id="legend">
+      <span><i style="background:var(--plane)"></i>Plane</span>
+      <span><i style="background:var(--sat)"></i>Satellite</span>
+      <span><i style="background:var(--body)"></i>Sun, Moon, planet</span>
+      <span><i style="background:var(--hot)"></i>Directly overhead</span>
+      <span id="legendNote">Top is north. Tap anything for details.</span>
+    </div>
+    <div class="slider">
+      <label for="cone">"Directly overhead" means within <b id="coneVal">10°</b> of straight up <span class="muted small">(≈ a fist at arm's length is 10°)</span></label>
+      <input type="range" id="cone" min="2" max="25" step="1" value="10">
+    </div>
+    <div id="lists"></div>
+    <p id="sources" class="muted small" style="margin-top:16px"></p>
+  </section>
+</main>
+
+<footer>
+  <p>Aircraft positions come from community ADS-B networks (adsb.lol, airplanes.live, adsb.fi, with OpenSky as a fallback); not every aircraft broadcasts, and military or private flights may be missing. Satellite orbits come from CelesTrak and are computed on your phone with satellite.js. The Sun, Moon and planets are computed on your phone with Astronomy Engine. Map © OpenStreetMap contributors. Positions are approximate. Don't use this for navigation or safety.</p>
+  <p>Your location stays on your device except for the rounded coordinates sent to the aircraft service to ask what's nearby.</p>
+</footer>
+
+<script src="lib/leaflet.js"></script>
+<script src="lib/satellite.min.js"></script>
+<script src="lib/astronomy.browser.min.js"></script>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const MILE = 1609.344, FT = 0.3048, KT = 0.514444, NM = 1852, RE = 6371008.8;
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const AC_RADIUS_NM = 25;                 // fetch radius for planes (the sky view shows planes out to the horizon)
+const SAT_CACHE_HOURS = 6;               // CelesTrak asks people not to re-download the same data more than every couple of hours
+const COLORS = { plane: '#7fd3ff', sat: '#c6b8ff', body: '#ffd479', you: '#3d8bff', hot: '#ffcf3a' };
+
+const S = {
+  obs: null,              // {lat, lon, alt (m), acc (m), src}
+  cone: 10,               // degrees from zenith that count as "directly overhead"
+  tab: 'mile',
+  aircraft: [], acSource: null, acTime: 0, acErr: '',
+  sats: [], satScan: 0, satStatus: 'Loading satellites…',
+  bodies: [], bodiesTime: 0,
+  objs: [], overhead: [], incoming: [],
+  shownOverhead: new Set(),
+  selected: null, hits: [],
+  map: null, wake: null,
+};
+try { const c = +localStorage.getItem('overhead.cone'); if (c >= 2 && c <= 25) S.cone = c; } catch (e) {}
+
+/* ---------- helpers ---------- */
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+const dirName = (az) => DIRS[Math.round(((az % 360) + 360) % 360 / 22.5) % 16];
+const fmtInt = (n) => Math.round(n).toLocaleString();
+const fmtMi = (m) => { const mi = m / MILE; return mi < 0.1 ? `${fmtInt(m / FT)} ft` : mi < 10 ? `${mi.toFixed(mi < 1 ? 2 : 1)} mi` : `${fmtInt(mi)} mi`; };
+const fmtAgo = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? `${s} s ago` : s < 7200 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+const fmtSecs = (s) => s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`;
+const wrapLon = (d) => ((d + 540) % 360) - 180;
+
+// local east/north offset in metres from the observer (flat-earth, fine for tens of miles)
+function enu(lat, lon) {
+  const o = S.obs;
+  return { e: wrapLon(lon - o.lon) * D2R * RE * Math.cos(o.lat * D2R), n: (lat - o.lat) * D2R * RE };
+}
+// ground distance between two lat/lon points (haversine)
+function groundDist(lat1, lon1, lat2, lon2) {
+  const a = Math.sin((lat2 - lat1) * D2R / 2) ** 2 + Math.cos(lat1 * D2R) * Math.cos(lat2 * D2R) * Math.sin(wrapLon(lon2 - lon1) * D2R / 2) ** 2;
+  return 2 * RE * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+async function fetchWithTimeout(url, ms, as) {
+  const c = new AbortController(); const t = setTimeout(() => c.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: c.signal, cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return as === 'text' ? await r.text() : await r.json();
+  } catch (e) { throw new Error(e.name === 'AbortError' ? 'timed out' : (e.message || 'network error')); }
+  finally { clearTimeout(t); }
+}
+
+/* ---------- location ---------- */
+function startGps() {
+  const m = $('startMsg');
+  if (!('geolocation' in navigator)) { m.textContent = 'This browser cannot share your location. Try the Heathrow demo.'; return; }
+  if (!window.isSecureContext) m.textContent = 'Location needs the page to be opened over https. ';
+  m.textContent += 'Asking for your location…';
+  navigator.geolocation.watchPosition(
+    (p) => setObs(p.coords.latitude, p.coords.longitude, p.coords.altitude ?? 0, p.coords.accuracy, 'GPS'),
+    (err) => {
+      if (S.obs) { $('gps').textContent = 'GPS paused: showing last fix'; return; }
+      m.textContent = err.code === 1
+        ? 'Location is blocked for this page. Allow it in your browser or phone settings (Settings → Privacy → Location on iPhone), then reload. Or try the Heathrow demo.'
+        : `Couldn't get a GPS fix (${err.message || 'unknown error'}). Step outside or try again.`;
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+}
+function setObs(lat, lon, alt, acc, src) {
+  const first = !S.obs;
+  const moved = S.obs ? groundDist(S.obs.lat, S.obs.lon, lat, lon) : 0;
+  S.obs = { lat, lon, alt: alt || 0, acc, src };
+  const p = $('gps'); p.classList.add('live');
+  p.textContent = src === 'GPS' ? `You: ${lat.toFixed(4)}, ${lon.toFixed(4)} ±${fmtInt(acc)} m` : `Demo: ${src}`;
+  if (first) launch();
+  else if (moved > 20) { fitMap(); updateBodies(); }
+}
+
+function launch() {
+  $('start').hidden = true; $('app').hidden = false;
+  initMap();
+  pollAircraft();
+  loadSats();
+  updateBodies(); setInterval(updateBodies, 15000);
+  setInterval(renderLists, 1000);
+  keepAwake();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- map (1-mile view) ---------- */
+function initMap() {
+  S.map = L.map('map', { zoomControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false,
+    boxZoom: false, keyboard: false, zoomSnap: 0, attributionControl: true, fadeAnimation: false });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(S.map);
+  fitMap();
+  new ResizeObserver(() => { S.map.invalidateSize(false); fitMap(); }).observe($('mileView'));
+}
+function fitMap() {
+  if (!S.map || !S.obs) return;
+  const { lat, lon } = S.obs;
+  const dLat = MILE / RE * R2D, dLon = dLat / Math.cos(lat * D2R);
+  S.map.fitBounds([[lat - dLat, lon - dLon], [lat + dLat, lon + dLon]], { padding: [0, 0], animate: false });
+}
+
+/* ---------- aircraft ---------- */
+function readsb(list) {   // adsb.lol / airplanes.live / adsb.fi share the readsb JSON format
+  const now = Date.now();
+  return (list || []).filter((a) => typeof a.lat === 'number' && typeof a.lon === 'number').map((a) => {
+    const onGround = a.alt_baro === 'ground';
+    const altFt = typeof a.alt_geom === 'number' ? a.alt_geom : typeof a.alt_baro === 'number' ? a.alt_baro : null;
+    return {
+      key: 'ac:' + a.hex, kind: 'plane', hex: a.hex, name: (a.flight || '').trim() || a.r || (a.hex || '').toUpperCase(),
+      reg: a.r, type: a.t, desc: a.desc, lat: a.lat, lon: a.lon, altM: onGround ? 0 : altFt == null ? null : altFt * FT,
+      onGround, gs: typeof a.gs === 'number' ? a.gs * KT : null, track: typeof a.track === 'number' ? a.track : null,
+      t0: now - (typeof a.seen_pos === 'number' ? a.seen_pos * 1000 : 0),
+    };
+  });
+}
+const AC_SOURCES = [
+  { name: 'adsb.lol', every: 5000, url: (la, lo) => `https://api.adsb.lol/v2/point/${la}/${lo}/${AC_RADIUS_NM}`, parse: (j) => readsb(j.ac) },
+  { name: 'airplanes.live', every: 5000, url: (la, lo) => `https://api.airplanes.live/v2/point/${la}/${lo}/${AC_RADIUS_NM}`, parse: (j) => readsb(j.ac) },
+  { name: 'adsb.fi', every: 5000, url: (la, lo) => `https://opendata.adsb.fi/api/v2/lat/${la}/lon/${lo}/dist/${AC_RADIUS_NM}`, parse: (j) => readsb(j.ac || j.aircraft) },
+  { name: 'OpenSky', every: 15000, url: (la, lo) => {
+      const dLat = AC_RADIUS_NM * NM / 111320, dLon = dLat / Math.cos(la * D2R);
+      return `https://opensky-network.org/api/states/all?lamin=${(la - dLat).toFixed(3)}&lomin=${(lo - dLon).toFixed(3)}&lamax=${(+la + dLat).toFixed(3)}&lomax=${(+lo + dLon).toFixed(3)}`;
+    }, parse: (j) => {
+      const now = Date.now();
+      return (j.states || []).filter((s) => s[5] != null && s[6] != null).map((s) => ({
+        key: 'ac:' + s[0], kind: 'plane', hex: s[0], name: (s[1] || '').trim() || s[0].toUpperCase(), lat: s[6], lon: s[5],
+        altM: s[8] ? 0 : (s[13] ?? s[7]), onGround: !!s[8], gs: s[9], track: s[10],
+        t0: s[3] ? s[3] * 1000 : now,
+      }));
+    } },
+];
+let acIdx = 0;
+async function pollAircraft() {
+  const la = S.obs.lat.toFixed(3), lo = S.obs.lon.toFixed(3);   // ~100 m rounding: plenty for a 25 nm search
+  for (let tried = 0; tried < AC_SOURCES.length; tried++) {
+    const src = AC_SOURCES[acIdx];
+    try {
+      const j = await fetchWithTimeout(src.url(la, lo), 9000);
+      S.aircraft = src.parse(j); S.acSource = src.name; S.acTime = Date.now(); S.acErr = '';
+      setTimeout(pollAircraft, document.hidden ? 30000 : src.every);
+      return;
+    } catch (e) {
+      S.acErr = `${src.name}: ${e.message}`;
+      acIdx = (acIdx + 1) % AC_SOURCES.length;
+    }
+  }
+  S.acSource = null;
+  setTimeout(pollAircraft, 20000);
+}
+// where the plane is now, extrapolated from its last report along its track (capped at 30 s)
+function planeNow(a, now) {
+  let lat = a.lat, lon = a.lon;
+  if (!a.onGround && a.gs && a.track != null) {
+    const d = a.gs * Math.min(30, Math.max(0, (now - a.t0) / 1000));
+    lat += d * Math.cos(a.track * D2R) / RE * R2D;
+    lon += d * Math.sin(a.track * D2R) / (RE * Math.cos(lat * D2R)) * R2D;
+  }
+  return { lat, lon };
+}
+
+/* ---------- satellites ---------- */
+const TLE_URLS = [
+  ['all active satellites', 'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle'],
+  ['bright satellites', 'https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle'],
+];
+async function cacheGet() {
+  try { const c = await caches.open('overhead-tle'); const r = await c.match('tle'); if (!r) return null;
+    return { text: await r.text(), time: +r.headers.get('x-time'), label: r.headers.get('x-label') }; } catch (e) { return null; }
+}
+async function cachePut(text, label) {
+  try { const c = await caches.open('overhead-tle'); await c.put('tle', new Response(text, { headers: { 'x-time': String(Date.now()), 'x-label': label } })); } catch (e) {}
+}
+async function loadSats() {
+  const cached = await cacheGet();
+  if (cached && Date.now() - cached.time < SAT_CACHE_HOURS * 3600e3) return useTle(cached.text, cached.label, cached.time);
+  for (const [label, url] of TLE_URLS) {
+    try { const t = await fetchWithTimeout(url, 25000, 'text'); if (!/^1 /m.test(t)) throw new Error('unexpected reply');
+      cachePut(t, label); return useTle(t, label, Date.now()); } catch (e) { S.satStatus = `Satellites: CelesTrak ${e.message}`; }
+  }
+  if (cached) return useTle(cached.text, cached.label, cached.time);
+  setTimeout(loadSats, 5 * 60e3);
+}
+function useTle(text, label, time) {
+  const lines = text.split(/\r?\n/).map((s) => s.trimEnd()).filter(Boolean), out = [];
+  for (let i = 0; i < lines.length;) {
+    if (lines[i + 1]?.startsWith('1 ') && lines[i + 2]?.startsWith('2 ')) {
+      try { const rec = satellite.twoline2satrec(lines[i + 1], lines[i + 2]);
+        if (!rec.error) out.push({ key: 'sat:' + rec.satnum, kind: 'sat', id: rec.satnum, name: lines[i].trim(), rec, el: -90, az: 0, t: 0 }); } catch (e) {}
+      i += 3;
+    } else i++;
+  }
+  S.sats = out; S.satTime = time; S.satScan = 0; S.satSwept = false;
+  S.satStatus = `Satellites: ${fmtInt(out.length)} ${label} from CelesTrak (orbits downloaded ${fmtAgo(time)})`;
+}
+function satUpdate(s, date, gmst, obsGd) {
+  const pv = satellite.propagate(s.rec, date);
+  if (!pv || !pv.position) { s.dead = true; return; }
+  const look = satellite.ecfToLookAngles(obsGd, satellite.eciToEcf(pv.position, gmst));
+  s.el = look.elevation * R2D; s.az = (look.azimuth * R2D + 360) % 360; s.range = look.rangeSat * 1000; s.t = date.getTime();
+  if (s.el > 0) {
+    const gd = satellite.eciToGeodetic(pv.position, gmst);
+    s.slat = satellite.degreesLat(gd.latitude); s.slon = satellite.degreesLong(gd.longitude); s.hKm = gd.height;
+  }
+}
+// Propagating ~10,000 orbits every frame is too much for a phone, so: sweep the whole list a slice at a time
+// (about 5 ms of work per frame), and recompute anything high in the sky every frame.
+function satTick(now) {
+  if (!S.sats.length) return;
+  const date = new Date(now), gmst = satellite.gstime(date);
+  const obsGd = { latitude: S.obs.lat * D2R, longitude: S.obs.lon * D2R, height: S.obs.alt / 1000 };
+  const t0 = performance.now(), n = S.sats.length;
+  for (let k = 0; k < n && performance.now() - t0 < 5; k++) {
+    const s = S.sats[S.satScan]; S.satScan = (S.satScan + 1) % n; if (S.satScan === 0) S.satSwept = true;
+    if (!s.dead) satUpdate(s, date, gmst, obsGd);
+  }
+  for (const s of S.sats) if (!s.dead && s.el > 35 && s.t !== now) satUpdate(s, date, gmst, obsGd);
+}
+
+/* ---------- Sun, Moon, planets ---------- */
+const BODIES = [['Sun', '☀'], ['Moon', '☾'], ['Mercury', '☿'], ['Venus', '♀'], ['Mars', '♂'], ['Jupiter', '♃'], ['Saturn', '♄'], ['Uranus', '⛢'], ['Neptune', '♆']];
+function updateBodies() {
+  if (!S.obs) return;
+  const d = new Date(), o = new Astronomy.Observer(S.obs.lat, S.obs.lon, S.obs.alt);
+  S.bodies = BODIES.map(([name, sym]) => {
+    const eq = Astronomy.Equator(name, d, o, true, true), h = Astronomy.Horizon(d, o, eq.ra, eq.dec, 'normal');
+    return { key: 'body:' + name, kind: 'body', name, sym, el: h.altitude, az: h.azimuth, distKm: eq.dist * 149597870.7 };
+  });
+}
+
+/* ---------- per-frame: work out what's where ---------- */
+function compute(now) {
+  const objs = [], cone = S.cone, zenEl = 90 - cone;
+  for (const a of S.aircraft) {
+    const p = planeNow(a, now), { e, n } = enu(p.lat, p.lon), d = Math.hypot(e, n);
+    const h = a.altM == null ? null : a.altM - S.obs.alt - d * d / (2 * RE);
+    const el = h == null ? null : Math.atan2(h, d) * R2D;
+    const o = { ...a, lat: p.lat, lon: p.lon, e, n, ground: d, az: (Math.atan2(e, n) * R2D + 360) % 360, el, range: h == null ? null : Math.hypot(d, h) };
+    o.inMile = d <= MILE;
+    o.overhead = !a.onGround && el != null && el >= zenEl;
+    // will it pass overhead soon? closest approach along its current track
+    o.eta = null;
+    if (!o.overhead && !a.onGround && h > 0 && a.gs > 20 && a.track != null) {
+      const ve = a.gs * Math.sin(a.track * D2R), vn = a.gs * Math.cos(a.track * D2R);
+      const t = -(e * ve + n * vn) / (a.gs * a.gs);
+      if (t > 0 && t < 300) {
+        const dc = Math.hypot(e + ve * t, n + vn * t);
+        if (Math.atan2(h, dc) * R2D >= zenEl) o.eta = t;
+      }
+    }
+    objs.push(o);
+  }
+  for (const s of S.sats) {
+    if (s.dead || s.el <= 0) continue;
+    const o = Object.assign(Object.create(null), s);
+    o.ground = s.slat != null ? groundDist(S.obs.lat, S.obs.lon, s.slat, s.slon) : Infinity;
+    o.inMile = o.ground <= MILE; o.overhead = s.el >= zenEl;
+    if (o.inMile) Object.assign(o, enu(s.slat, s.slon));
+    objs.push(o);
+  }
+  for (const b of S.bodies) objs.push({ ...b, overhead: b.el >= zenEl, inMile: false });
+  S.objs = objs;
+  S.overhead = objs.filter((o) => o.overhead).sort((a, b) => b.el - a.el);
+  S.incoming = objs.filter((o) => o.eta != null).sort((a, b) => a.eta - b.eta);
+}
+
+/* ---------- "it's above you" alert ---------- */
+function updateAlert() {
+  const box = $('alert'), list = S.overhead;
+  const keys = new Set(list.map((o) => o.key));
+  const fresh = list.filter((o) => !S.shownOverhead.has(o.key));
+  S.shownOverhead = keys;
+  if (!list.length) { box.hidden = true; return; }
+  // planes first (they're what you'll actually see), then the ISS/bright stuff, then the rest
+  const rank = (o) => o.kind === 'plane' ? 0 : o.kind === 'body' ? 1 : /ISS|TIANGONG|CSS/i.test(o.name) ? 1 : 2;
+  const top = [...list].sort((a, b) => rank(a) - rank(b) || b.el - a.el)[0];
+  const extra = list.length - 1;
+  box.hidden = false;
+  box.innerHTML = `${icon(top)} ${esc(top.name)} is directly overhead — look up!<small>${esc(detail(top))}${extra ? ` · and ${extra} more above you` : ''}</small>`;
+  if (fresh.some((o) => o.kind !== 'sat' || rank(o) === 1) && navigator.vibrate) navigator.vibrate([180, 90, 180]);
+}
+
+/* ---------- text ---------- */
+function icon(o) { return o.kind === 'plane' ? '✈︎' : o.kind === 'sat' ? '🛰' : o.sym; }
+function detail(o) {
+  const where = `${Math.round(o.el ?? 0)}° up${o.el != null && o.el < 89.5 ? `, ${dirName(o.az)}` : ''}`;
+  if (o.kind === 'plane') {
+    if (o.onGround) return `On the ground · ${fmtMi(o.ground)} ${dirName(o.az)}`;
+    const alt = o.altM == null ? 'altitude unknown' : `${fmtInt(o.altM / FT)} ft`;
+    return `${alt} · ${fmtMi(o.ground)} ${dirName(o.az)}${o.el == null ? '' : ` · ${Math.round(o.el)}° up`}`;
+  }
+  if (o.kind === 'sat') return `${fmtInt(o.hKm ?? 0)} km high · ${where}`;
+  return `${o.el < 0 ? `${Math.round(-o.el)}° below the horizon, ${dirName(o.az)}` : where} · ${o.name === 'Moon' ? fmtInt(o.distKm) + ' km' : (o.distKm / 149597870.7).toFixed(2) + ' AU'} away`;
+}
+function infoHtml(o) {
+  const rows = [];
+  if (o.kind === 'plane') {
+    rows.push(o.type || o.desc ? esc([o.desc || o.type, o.reg].filter(Boolean).join(' · ')) : o.reg ? esc(o.reg) : '');
+    if (o.altM != null) rows.push(`Altitude ${fmtInt(o.altM / FT)} ft (${fmtInt(o.altM)} m)`);
+    rows.push(`${fmtMi(o.ground)} away over the ground, to the ${dirName(o.az)}`);
+    if (o.el != null) rows.push(`${o.el.toFixed(0)}° above the horizon${o.range ? ` · ${fmtMi(o.range)} in a straight line` : ''}`);
+    if (o.gs) rows.push(`${fmtInt(o.gs / KT)} knots heading ${dirName(o.track)} (${Math.round(o.track)}°)`);
+    if (o.eta != null) rows.push(`<b style="color:var(--hot)">Due overhead in about ${fmtSecs(o.eta)}</b>`);
+    const link = `https://globe.adsb.lol/?icao=${encodeURIComponent(o.hex)}`;
+    rows.push(`<a href="${link}" target="_blank" rel="noopener" style="color:#b0bce0">Track it on adsb.lol ↗</a>`);
+  } else if (o.kind === 'sat') {
+    rows.push(`NORAD ${esc(o.id)} · ${fmtInt(o.hKm)} km above the Earth`);
+    rows.push(`${o.el.toFixed(1)}° above the horizon, to the ${dirName(o.az)} · ${fmtInt(o.range / 1000)} km away`);
+    rows.push(`Its ground track is ${fmtMi(o.ground)} from you. Satellites are only visible when sunlit against a dark sky, usually around dusk and dawn.`);
+  } else {
+    rows.push(`${o.el.toFixed(1)}° ${o.el >= 0 ? 'above' : 'below'} the horizon, to the ${dirName(o.az)} (${Math.round(o.az)}°)`);
+    rows.push(o.name === 'Moon' ? `${fmtInt(o.distKm)} km away` : `${(o.distKm / 149597870.7).toFixed(3)} AU (${fmtInt(o.distKm / 1e6)} million km) away`);
+  }
+  return `<button class="x" aria-label="Close">×</button><b>${icon(o)} ${esc(o.name)}</b>${o.overhead ? ' <span style="color:var(--hot)">· directly overhead</span>' : ''}<br>${rows.filter(Boolean).join('<br>')}`;
+}
+function li(o, hot) {
+  return `<li data-key="${esc(o.key)}" class="${hot ? 'hot' : ''}"><span class="ic">${icon(o)}</span><span><span class="nm">${esc(o.name)}</span><br><span class="dt">${esc(detail(o))}</span></span>${o.eta != null ? `<span class="rt">in ${fmtSecs(o.eta)}</span>` : ''}</li>`;
+}
+function section(title, items, empty, hot) {
+  return `<h3 class="${hot ? 'hot' : ''}">${title}</h3>` + (items.length ? `<ul class="objs">${items.map((o) => li(o, hot || o.overhead)).join('')}</ul>` : `<div class="empty">${empty}</div>`);
+}
+function renderLists() {
+  if (!S.obs) return;
+  const planes = S.objs.filter((o) => o.kind === 'plane').sort((a, b) => a.ground - b.ground);
+  const inMile = planes.filter((o) => o.inMile);
+  const sats = S.objs.filter((o) => o.kind === 'sat').sort((a, b) => b.el - a.el);
+  const bodies = S.objs.filter((o) => o.kind === 'body').sort((a, b) => b.el - a.el);
+  let h = section('Directly overhead now', S.overhead, `Nothing within ${S.cone}° of straight up right now.`, true);
+  if (S.incoming.length) h += section('Heading over you', S.incoming.slice(0, 5), '', false);
+  h += section('Planes within 1 mile', inMile, planes.length ? `None inside the mile. Nearest: ${esc(planes[0].name)}, ${fmtMi(planes[0].ground)} ${dirName(planes[0].az)}.` : S.acSource ? 'No planes reported within 25 nautical miles.' : 'Waiting for flight data…');
+  if (!inMile.length && planes.length) h += section('Nearest planes', planes.slice(0, 5), '');
+  h += section('Highest satellites', sats.slice(0, 6), !S.sats.length ? esc(S.satStatus) : S.satSwept ? `None of the ${fmtInt(S.sats.length)} tracked satellites are above your horizon right now.` : 'Working out satellite positions…');
+  h += section('Sun, Moon and planets', bodies, '');
+  const keepY = window.scrollY;
+  $('lists').innerHTML = h;
+  window.scrollTo(0, keepY);
+  $('sources').textContent = [
+    S.acSource ? `Planes: ${S.acSource}, updated ${fmtAgo(S.acTime)}, ${planes.length} within 25 nmi.` : `Planes: no flight service answered${S.acErr ? ` (${S.acErr})` : ''}. Retrying.`,
+    S.satStatus + '.',
+    `GPS altitude ${S.obs.src === 'GPS' ? fmtInt(S.obs.alt) + ' m' : 'not used'}.`,
+  ].join(' ');
+}
+
+/* ---------- drawing ---------- */
+function sizeCanvas(cv) {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(3, window.devicePixelRatio || 1);
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: r.width, h: r.height };
+}
+function planeShape(ctx, x, y, track, size, color) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate((track || 0) * D2R); ctx.scale(size / 20, size / 20);
+  ctx.beginPath();
+  ctx.moveTo(0, -10); ctx.lineTo(1.6, -6); ctx.lineTo(1.6, -2); ctx.lineTo(9, 3); ctx.lineTo(9, 5); ctx.lineTo(1.6, 2.5);
+  ctx.lineTo(1.2, 7); ctx.lineTo(4, 9); ctx.lineTo(4, 10.5); ctx.lineTo(0, 9.5); ctx.lineTo(-4, 10.5); ctx.lineTo(-4, 9);
+  ctx.lineTo(-1.2, 7); ctx.lineTo(-1.6, 2.5); ctx.lineTo(-9, 5); ctx.lineTo(-9, 3); ctx.lineTo(-1.6, -2); ctx.lineTo(-1.6, -6); ctx.closePath();
+  ctx.fillStyle = color; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.stroke();
+  ctx.restore();
+}
+function hotRing(ctx, x, y, r0, t) {
+  for (let k = 0; k < 2; k++) {
+    const ph = ((t / 1400) + k / 2) % 1;
+    ctx.beginPath(); ctx.arc(x, y, r0 + ph * 26, 0, 2 * Math.PI);
+    ctx.strokeStyle = `rgba(255,207,58,${(1 - ph) * 0.9})`; ctx.lineWidth = 3; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(x, y, r0, 0, 2 * Math.PI); ctx.strokeStyle = COLORS.hot; ctx.lineWidth = 2.5; ctx.stroke();
+}
+function label(ctx, x, y, text, color, sub) {
+  ctx.font = '600 12px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(6,9,18,.85)'; ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y);
+  if (sub) { ctx.font = '11px system-ui, sans-serif'; ctx.strokeText(sub, x, y + 13); ctx.fillStyle = '#b8c2dc'; ctx.fillText(sub, x, y + 13); }
+}
+function dot(ctx, x, y, r, color) { ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); }
+
+function drawMile(t) {
+  const { ctx, w, h } = sizeCanvas($('mileCanvas'));
+  ctx.clearRect(0, 0, w, h);
+  const hits = []; S.hits = hits;
+  const cx = w / 2, cy = h / 2, ppm = (Math.min(w, h) / 2) / MILE;   // map is fitted so 1 mile = half the square
+  // rings
+  ctx.setLineDash([4, 5]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(200,215,255,.35)';
+  for (const f of [0.25, 0.5]) { ctx.beginPath(); ctx.arc(cx, cy, f * MILE * ppm, 0, 2 * Math.PI); ctx.stroke(); }
+  ctx.setLineDash([]); ctx.strokeStyle = 'rgba(255,207,58,.65)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, MILE * ppm - 1, 0, 2 * Math.PI); ctx.stroke();
+  ctx.font = '11px system-ui, sans-serif'; ctx.fillStyle = 'rgba(220,228,250,.75)'; ctx.textAlign = 'left';
+  ctx.fillText('¼ mi', cx + 0.25 * MILE * ppm * 0.72 + 3, cy - 0.25 * MILE * ppm * 0.72);
+  ctx.fillText('½ mi', cx + 0.5 * MILE * ppm * 0.72 + 3, cy - 0.5 * MILE * ppm * 0.72);
+  ctx.fillStyle = 'rgba(255,207,58,.9)'; ctx.fillText('1 mile', cx + MILE * ppm * 0.71 + 4, cy - MILE * ppm * 0.71 + 4);
+  ctx.textAlign = 'center'; ctx.font = '700 13px system-ui, sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText('N', cx, 12);
+
+  // you
+  if (S.obs.acc && S.obs.acc < MILE) { ctx.beginPath(); ctx.arc(cx, cy, S.obs.acc * ppm, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(61,139,255,.14)'; ctx.fill(); }
+  const spaceAbove = S.overhead.filter((o) => o.kind !== 'plane');
+  if (spaceAbove.length) hotRing(ctx, cx, cy, 14, t);
+  dot(ctx, cx, cy, 7, '#fff'); dot(ctx, cx, cy, 5.5, COLORS.you);
+  if (spaceAbove.length) {
+    const top = spaceAbove[0];
+    ctx.textAlign = 'center'; label(ctx, cx, cy + 30, `${top.kind === 'sat' ? '🛰' : top.sym} ${top.name} above you`, COLORS.hot, spaceAbove.length > 1 ? `+${spaceAbove.length - 1} more` : `${Math.round(top.el)}° up`);
+    hits.push({ x: cx, y: cy, o: top });
+  }
+
+  const halfW = w / 2 / ppm, halfH = h / 2 / ppm;
+  const offscreen = [];
+  for (const o of S.objs) {
+    if (o.e == null) continue;                     // bodies, and satellites whose ground track isn't in the mile
+    const x = cx + o.e * ppm, y = cy - o.n * ppm;
+    const inside = Math.abs(o.e) < halfW - 6 / ppm && Math.abs(o.n) < halfH - 6 / ppm;
+    if (!inside) { if (o.kind === 'plane' && !o.onGround) offscreen.push(o); continue; }
+    if (o.overhead) hotRing(ctx, x, y, 15, t);
+    if (o.kind === 'plane') planeShape(ctx, x, y, o.track, o.overhead ? 28 : 22, o.overhead ? COLORS.hot : o.onGround ? '#7d8aa8' : COLORS.plane);
+    else dot(ctx, x, y, 6, o.overhead ? COLORS.hot : COLORS.sat);
+    ctx.textAlign = 'left';
+    label(ctx, x + 16, y - 4, o.name, o.overhead ? COLORS.hot : '#e9eefb', o.kind === 'plane' ? (o.onGround ? 'on ground' : o.altM != null ? `${fmtInt(o.altM / FT)} ft` : '') : `${fmtInt(o.hKm)} km`);
+    hits.push({ x, y, o });
+  }
+  // edge arrows for the nearest planes outside the square, so you can see what's coming
+  offscreen.sort((a, b) => a.ground - b.ground).slice(0, 6).forEach((o) => {
+    const ang = Math.atan2(o.e, o.n), sx = Math.sin(ang), sy = -Math.cos(ang);
+    const k = Math.min((w / 2 - 22) / Math.abs(sx || 1e-9), (h / 2 - 22) / Math.abs(sy || 1e-9));
+    const x = cx + sx * k, y = cy + sy * k, hot = o.eta != null;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(7, 5); ctx.lineTo(-7, 5); ctx.closePath();
+    ctx.fillStyle = hot ? COLORS.hot : 'rgba(127,211,255,.85)'; ctx.fill(); ctx.restore();
+    ctx.textAlign = x > cx + w * 0.25 ? 'right' : x < cx - w * 0.25 ? 'left' : 'center';
+    const lx = x - sx * 16, ly = y - sy * 18;
+    label(ctx, lx, ly, o.name, hot ? COLORS.hot : '#cfe6ff', hot ? `overhead in ${fmtSecs(o.eta)}` : fmtMi(o.ground));
+    hits.push({ x, y, o });
+  });
+}
+
+function drawSky(t) {
+  const { ctx, w, h } = sizeCanvas($('skyCanvas'));
+  const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 22;
+  const hits = []; S.hits = hits;
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  g.addColorStop(0, '#16224a'); g.addColorStop(1, '#070b18');
+  ctx.fillStyle = '#060912'; ctx.fillRect(0, 0, w, h);
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.fillStyle = g; ctx.fill();
+  // overhead cone
+  const rc = R * S.cone / 90;
+  ctx.beginPath(); ctx.arc(cx, cy, rc, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255,207,58,.12)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,207,58,.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(200,215,255,.22)'; ctx.setLineDash([3, 5]);
+  for (const alt of [30, 60]) { ctx.beginPath(); ctx.arc(cx, cy, R * (90 - alt) / 90, 0, 2 * Math.PI); ctx.stroke(); }
+  ctx.setLineDash([]); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.strokeStyle = 'rgba(200,215,255,.45)'; ctx.stroke();
+  ctx.font = '700 13px system-ui, sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('N', cx, cy - R - 11); ctx.fillText('S', cx, cy + R + 11); ctx.fillText('E', cx + R + 11, cy); ctx.fillText('W', cx - R - 11, cy);
+  ctx.font = '10.5px system-ui, sans-serif'; ctx.fillStyle = 'rgba(220,228,250,.6)';
+  ctx.fillText('30° up', cx, cy - R * 60 / 90 + 9); ctx.fillText('60° up', cx, cy - R * 30 / 90 + 9);
+  ctx.fillStyle = 'rgba(255,207,58,.85)'; ctx.fillText('straight up', cx, cy + rc + 9);
+  const pos = (o) => { const r = R * (90 - o.el) / 90; return [cx + r * Math.sin(o.az * D2R), cy - r * Math.cos(o.az * D2R)]; };
+
+  // satellites: faint dots, plus labels for the high ones
+  for (const o of S.objs) {
+    if (o.kind !== 'sat') continue;
+    const [x, y] = pos(o);
+    if (o.overhead) { hotRing(ctx, x, y, 9, t); dot(ctx, x, y, 4, COLORS.hot); }
+    else dot(ctx, x, y, o.el > 45 ? 2.4 : 1.5, o.el > 45 ? COLORS.sat : 'rgba(198,184,255,.5)');
+    if (o.overhead || /^ISS|TIANGONG|HST$/i.test(o.name)) { ctx.textAlign = 'left'; label(ctx, x + 9, y, o.name, o.overhead ? COLORS.hot : COLORS.sat); }
+    hits.push({ x, y, o });
+  }
+  for (const o of S.objs) {
+    if (o.kind !== 'body' || o.el <= 0) continue;
+    const [x, y] = pos(o);
+    if (o.overhead) hotRing(ctx, x, y, 14, t);
+    const r = o.name === 'Sun' ? 10 : o.name === 'Moon' ? 9 : 5;
+    if (o.name === 'Sun') { const sg = ctx.createRadialGradient(x, y, 0, x, y, 30); sg.addColorStop(0, 'rgba(255,214,90,.55)'); sg.addColorStop(1, 'rgba(255,214,90,0)'); ctx.fillStyle = sg; ctx.fillRect(x - 30, y - 30, 60, 60); }
+    dot(ctx, x, y, r, o.name === 'Sun' ? '#ffd65a' : o.name === 'Moon' ? '#eceef6' : o.name === 'Mars' ? '#ff9a6b' : COLORS.body);
+    { const rt = x > w - 80; ctx.textAlign = rt ? 'right' : 'left'; label(ctx, rt ? x - r - 5 : x + r + 5, y, o.name, o.overhead ? COLORS.hot : COLORS.body); }
+    hits.push({ x, y, o });
+  }
+  for (const o of S.objs) {
+    if (o.kind !== 'plane' || o.onGround || o.el == null || o.el <= 0) continue;
+    const [x, y] = pos(o);
+    if (o.overhead) hotRing(ctx, x, y, 15, t);
+    planeShape(ctx, x, y, o.track, o.overhead ? 26 : 18, o.overhead ? COLORS.hot : o.eta != null ? '#ffe7a0' : COLORS.plane);
+    if (o.overhead || o.el > 25 || o.eta != null) { const rt = x > w - 90; ctx.textAlign = rt ? 'right' : 'left'; label(ctx, rt ? x - 13 : x + 13, y - 3, o.name, o.overhead ? COLORS.hot : '#e9eefb', o.altM != null ? `${fmtInt(o.altM / FT)} ft` : ''); }
+    hits.push({ x, y, o });
+  }
+  dot(ctx, cx, cy, 2.5, 'rgba(255,255,255,.8)');
+}
+
+/* ---------- tap for details ---------- */
+function showInfo(o) {
+  S.selected = o ? o.key : null;
+  const box = $('info');
+  if (!o) { box.hidden = true; return; }
+  box.innerHTML = infoHtml(o); box.hidden = false;
+}
+function onTap(ev) {
+  const r = ev.currentTarget.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+  let best = null, bd = 30;
+  for (const h of S.hits) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h.o; } }
+  showInfo(best);
+}
+$('mileCanvas').addEventListener('click', onTap);
+$('skyCanvas').addEventListener('click', onTap);
+$('info').addEventListener('click', (e) => { if (e.target.classList.contains('x')) showInfo(null); });
+$('lists').addEventListener('click', (e) => {
+  const row = e.target.closest('li[data-key]'); if (!row) return;
+  const o = S.objs.find((x) => x.key === row.dataset.key); if (!o) return;
+  if (S.tab === 'mile' && o.e == null) setTab('sky');
+  showInfo(o); $('app').scrollIntoView({ behavior: 'smooth' });
+});
+
+/* ---------- tabs, slider, wake lock ---------- */
+function setTab(t) {
+  S.tab = t;
+  $('tabMile').setAttribute('aria-selected', t === 'mile'); $('tabSky').setAttribute('aria-selected', t === 'sky');
+  $('mileView').hidden = t !== 'mile'; $('skyView').hidden = t !== 'sky';
+  $('legendNote').textContent = t === 'mile' ? 'Top is north. Tap anything for details.' : 'Centre is straight up, edge is the horizon. Top is north, like a map.';
+  if (t === 'mile' && S.map) setTimeout(() => { S.map.invalidateSize(false); fitMap(); }, 0);
+}
+$('tabMile').onclick = () => setTab('mile');
+$('tabSky').onclick = () => setTab('sky');
+$('cone').value = S.cone; $('coneVal').textContent = S.cone + '°';
+$('cone').oninput = (e) => { S.cone = +e.target.value; $('coneVal').textContent = S.cone + '°'; try { localStorage.setItem('overhead.cone', S.cone); } catch (err) {} };
+async function keepAwake() {
+  try { if ('wakeLock' in navigator && !document.hidden) S.wake = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) keepAwake(); });
+
+/* ---------- main loop ---------- */
+function frame(t) {
+  const now = Date.now();
+  satTick(now);
+  compute(now);
+  updateAlert();
+  if (S.selected && now - (frame.info || 0) > 1000) {   // refresh the details card once a second (not every frame, so its link stays tappable)
+    frame.info = now; const o = S.objs.find((x) => x.key === S.selected); if (o) $('info').innerHTML = infoHtml(o);
+  }
+  if (S.tab === 'mile') drawMile(t); else drawSky(t);
+  if (!frame.listed) { frame.listed = true; renderLists(); }
+  requestAnimationFrame(frame);
+}
+
+$('go').onclick = startGps;
+$('demo').onclick = () => setObs(51.4700, -0.4100, 25, 0, 'near Heathrow (Hatton Cross)');
+</script>
+</body>
+</html>

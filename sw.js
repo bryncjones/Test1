@@ -10,7 +10,8 @@ const CORE = [
 // Keep this version in step with the import map in index.html.
 const THREE_CDN = 'https://cdn.jsdelivr.net/npm/three@0.186.1/';
 const LIBS = [THREE_CDN + 'build/three.module.js', THREE_CDN + 'build/three.core.js', THREE_CDN + 'examples/jsm/controls/OrbitControls.js'];
-const PASS_THROUGH = /open-meteo\.com|api\.mapbox\.com|api\.maptiler\.com/;
+// Live data for the Overhead app (overhead/) must never come from cache.
+const PASS_THROUGH = /open-meteo\.com|api\.mapbox\.com|api\.maptiler\.com|adsb\.lol|airplanes\.live|adsb\.fi|opensky-network\.org|celestrak\.org|tile\.openstreetmap\.org/;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(async (c) => {
